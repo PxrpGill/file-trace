@@ -30,7 +30,10 @@ StorageDep = Annotated[FileStorage, Depends(get_storage)]
 
 
 def client_ip(request: Request) -> str | None:
-    return request.client.host if request.client else None
+    # за nginx реальный адрес приходит в X-Real-IP (см. frontend/nginx.conf)
+    return request.headers.get("x-real-ip") or (
+        request.client.host if request.client else None
+    )
 
 
 def get_current_user(

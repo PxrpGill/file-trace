@@ -4,9 +4,7 @@ services:
     environment:
       POSTGRES_DB: filetrace
       POSTGRES_USER: filetrace
-      POSTGRES_PASSWORD: filetrace
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-filetrace}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,5 +13,24 @@ services:
       timeout: 3s
       retries: 10
 
+  backend:
+    build: ./backend
+    environment:
+      FILETRACE_DATABASE_URL: postgresql+psycopg://filetrace:${POSTGRES_PASSWORD:-filetrace}@db:5432/filetrace
+      FILETRACE_JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    depends_on:
+      - backend
+
 volumes:
   pgdata:
+  storage:
