@@ -29,8 +29,9 @@ def db(engine):
 
 
 @pytest.fixture()
-def app(engine):
-    from app.api.deps import get_db
+def app(engine, tmp_path):
+    from app.api.deps import get_db, get_storage
+    from app.services.storage import LocalDiskStorage
 
     app = create_app()
     TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
@@ -40,6 +41,7 @@ def app(engine):
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_storage] = lambda: LocalDiskStorage(tmp_path / "blobs")
     return app
 
 

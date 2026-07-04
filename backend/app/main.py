@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, folders, permissions, users
+from app.api import auth, files, folders, permissions, users
 
 
 def create_app() -> FastAPI:
@@ -10,6 +10,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router)
     app.include_router(folders.router)
     app.include_router(permissions.router)
+    app.include_router(files.router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173"],

@@ -5,9 +5,11 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import SessionLocal
 from app.models import User, UserRole
 from app.services.security import decode_access_token
+from app.services.storage import FileStorage, LocalDiskStorage
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -18,6 +20,13 @@ def get_db() -> Iterator[Session]:
 
 
 DbDep = Annotated[Session, Depends(get_db)]
+
+
+def get_storage() -> FileStorage:
+    return LocalDiskStorage(settings.storage_root)
+
+
+StorageDep = Annotated[FileStorage, Depends(get_storage)]
 
 
 def client_ip(request: Request) -> str | None:
