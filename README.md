@@ -37,18 +37,19 @@ docker compose exec backend uv run python -m app.cli create-admin admin --full-n
 
 ```bash
 make setup      # зависимости backend (uv) и frontend (npm)
-make admin      # миграции + создание администратора (make admin USER_NAME=ivan)
+make admin      # поднимает dev-БД, применяет миграции, создаёт администратора
 make dev        # оба dev-сервера: API на :8000, UI на :5173
 make test       # pytest backend
 ```
 
-Или вручную:
+Разработка использует тот же PostgreSQL 17, что и прод: `make db` поднимает его в Docker
+на `localhost:5433` (порт меняется переменной `POSTGRES_PORT`). Вручную:
 
 ```bash
-# backend (Python 3.12+, uv)
+# backend (Python 3.12+, uv; PostgreSQL должен быть запущен — make db)
 cd backend
 uv sync
-uv run alembic upgrade head                # по умолчанию sqlite ./filetrace.db
+uv run alembic upgrade head
 uv run python -m app.cli create-admin admin
 uv run uvicorn app.main:app --port 8000 --reload
 
@@ -57,6 +58,9 @@ cd frontend
 npm install
 npm run dev                                # http://localhost:5173, /api проксируется на :8000
 ```
+
+Тесты не требуют Docker — они работают на изолированной in-memory базе (sqlite)
+ради скорости; совместимость схемы с PostgreSQL обеспечивают миграции Alembic.
 
 Настройки backend берутся из переменных окружения с префиксом `FILETRACE_`
 (`DATABASE_URL`, `STORAGE_ROOT`, `JWT_SECRET`, `JWT_EXPIRES_MINUTES`) или файла `backend/.env`.

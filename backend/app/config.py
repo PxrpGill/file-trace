@@ -6,7 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="FILETRACE_", env_file=".env")
 
-    database_url: str = "sqlite:///./filetrace.db"
+    database_url: str = (
+        "postgresql+psycopg://filetrace:filetrace@localhost:5433/filetrace"
+    )
     storage_root: Path = Path("./storage")
     jwt_secret: str = "dev-only-secret-change-me-in-production!"
     jwt_algorithm: str = "HS256"

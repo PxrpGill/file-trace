@@ -1,10 +1,12 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_DB: filetrace
       POSTGRES_USER: filetrace
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-filetrace}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,7 +19,8 @@ services:
     build: ./backend
     environment:
       FILETRACE_DATABASE_URL: postgresql+psycopg://filetrace:${POSTGRES_PASSWORD:-filetrace}@db:5432/filetrace
-      FILETRACE_JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # обязательно переопределите в .env для прода
+      FILETRACE_JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-in-production!}
     volumes:
       - storage:/data/storage
     depends_on:
