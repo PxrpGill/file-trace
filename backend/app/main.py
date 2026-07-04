@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth
+from app.api import auth, users
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="File-Trace")
     app.include_router(auth.router)
+    app.include_router(users.router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173"],
