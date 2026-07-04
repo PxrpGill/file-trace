@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./filetrace.db"
     storage_root: Path = Path("./storage")
-    jwt_secret: str = "change-me-in-production"
+    jwt_secret: str = "dev-only-secret-change-me-in-production!"
     jwt_algorithm: str = "HS256"
     jwt_expires_minutes: int = 480
 
