@@ -23,7 +23,7 @@ FastAPI + SQLAlchemy + PostgreSQL (метаданные и журнал), фай
 
 ```bash
 cp .env.example .env        # задайте JWT_SECRET и POSTGRES_PASSWORD
-docker compose up -d --build
+make up                     # docker compose up -d --build
 
 # первичный администратор
 docker compose exec backend uv run python -m app.cli create-admin admin --full-name "Администратор"
@@ -32,6 +32,17 @@ docker compose exec backend uv run python -m app.cli create-admin admin --full-n
 Интерфейс: http://localhost:8080 (порт меняется переменной `HTTP_PORT`).
 
 ## Разработка
+
+Через Makefile (см. `make help`):
+
+```bash
+make setup      # зависимости backend (uv) и frontend (npm)
+make admin      # миграции + создание администратора (make admin USER_NAME=ivan)
+make dev        # оба dev-сервера: API на :8000, UI на :5173
+make test       # pytest backend
+```
+
+Или вручную:
 
 ```bash
 # backend (Python 3.12+, uv)
