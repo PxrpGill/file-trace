@@ -5,6 +5,7 @@ import type { FolderNode } from '@/entities/folder'
 import { useFolderTreeQuery, flattenTree } from '@/entities/folder'
 import type { FileItem } from '@/entities/file'
 import { useFilesQuery } from '@/entities/file'
+import { useMutationState } from '@tanstack/react-query'
 import { formatDate, formatSize } from '@/shared/lib'
 import { Modal } from '@/shared/ui'
 import { FolderTree } from '@/widgets/folder-tree'
@@ -28,6 +29,12 @@ export function BrowserPage() {
   const tree = useFolderTreeQuery()
   const files = useFilesQuery(selected?.id ?? null)
   const uploadFile = useUploadFileMutation(selected?.id ?? null)
+  const uploadingVersionIds = new Set(
+    useMutationState({
+      filters: { mutationKey: ['create-version'], status: 'pending' },
+      select: (mutation) => mutation.options.mutationKey?.[1] as number,
+    }),
+  )
 
   useEffect(() => {
     const folderParam = searchParams.get('folder')
@@ -139,7 +146,9 @@ export function BrowserPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(files.data ?? []).map((file) => (
+                    {(files.data ?? []).map((file) => {
+                      const versionUploading = uploadingVersionIds.has(file.id)
+                      return (
                       <tr key={file.id}>
                         <td>
                           <span
@@ -160,18 +169,34 @@ export function BrowserPage() {
                           {file.current_version ? formatDate(file.current_version.created_at) : '—'}
                         </td>
                         <td className="actions">
-                          <DownloadFileButton url={`/api/files/${file.id}/download`} />{' '}
+                          <DownloadFileButton
+                            url={`/api/files/${file.id}/download`}
+                            disabled={versionUploading}
+                          />{' '}
                           {canWrite && (
                             <>
-                              <UploadVersionButton file={file} onError={setErrorMessage} />{' '}
-                              <RenameFileAction file={file} />{' '}
-                              <MoveFileAction file={file} onError={setErrorMessage} />{' '}
-                              <DeleteFileAction file={file} onDeleted={() => setOpenFile(null)} />
+                              <UploadVersionButton
+                                file={file}
+                                disabled={versionUploading}
+                                onError={setErrorMessage}
+                              />{' '}
+                              <RenameFileAction file={file} disabled={versionUploading} />{' '}
+                              <MoveFileAction
+                                file={file}
+                                disabled={versionUploading}
+                                onError={setErrorMessage}
+                              />{' '}
+                              <DeleteFileAction
+                                file={file}
+                                disabled={versionUploading}
+                                onDeleted={() => setOpenFile(null)}
+                              />
                             </>
                           )}
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
