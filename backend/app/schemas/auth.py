@@ -28,3 +28,7 @@ class UserOut(BaseModel):
     must_change_password: bool
 
     model_config = {"from_attributes": True}
+
+
+class DownloadTicketResponse(BaseModel):
+    ticket: str

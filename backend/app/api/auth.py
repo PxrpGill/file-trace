@@ -1,15 +1,21 @@
 from fastapi import APIRouter, HTTPException, Request, status
 
-from app.api.deps import CurrentUser, DbDep, client_ip
+from app.api.deps import ActiveUser, CurrentUser, DbDep, client_ip
 from app.models import AuditAction, User
 from app.schemas.auth import (
     ChangePasswordRequest,
+    DownloadTicketResponse,
     LoginRequest,
     LoginResponse,
     UserOut,
 )
 from app.services import audit
-from app.services.security import create_access_token, hash_password, verify_password
+from app.services.security import (
+    create_access_token,
+    create_download_ticket,
+    hash_password,
+    verify_password,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -47,6 +53,11 @@ def login(body: LoginRequest, db: DbDep, request: Request) -> LoginResponse:
 @router.get("/me", response_model=UserOut)
 def me(user: CurrentUser) -> User:
     return user
+
+
+@router.post("/download-ticket", response_model=DownloadTicketResponse)
+def download_ticket(user: ActiveUser) -> DownloadTicketResponse:
+    return DownloadTicketResponse(ticket=create_download_ticket(user.id))
 
 
 @router.post("/change-password")

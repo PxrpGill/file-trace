@@ -1,4 +1,5 @@
 from app.models import AuditAction, AuditLog
+from app.services.security import decode_download_ticket
 
 
 def login(client, username, password):
@@ -91,3 +92,21 @@ def test_change_password_requires_correct_old_password(client, user):
         headers=headers,
     )
     assert response.status_code == 400
+
+
+def test_download_ticket_requires_auth(client):
+    assert client.post("/api/auth/download-ticket").status_code == 401
+
+
+def test_download_ticket_returns_valid_ticket_for_user(client, admin):
+    headers = auth_header(client, "admin", "admin-pass")
+    response = client.post("/api/auth/download-ticket", headers=headers)
+    assert response.status_code == 200
+    assert decode_download_ticket(response.json()["ticket"]) == admin.id
+
+
+def test_download_ticket_blocked_for_must_change_password_user(client, db, user):
+    user.must_change_password = True
+    db.commit()
+    headers = auth_header(client, "alice", "alice-pass")
+    assert client.post("/api/auth/download-ticket", headers=headers).status_code == 403
