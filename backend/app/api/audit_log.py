@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import ActiveUser, AdminUser, DbDep
+from app.api.deps import ActiveUser, AdminUser, AdminUserOrTicket, DbDep
 from app.models import AuditAction, AuditLog, PermissionLevel, User
 from app.schemas.audit import AuditEntryOut, AuditPage
 from app.services.permissions import require_folder_access
@@ -117,7 +117,7 @@ def journal(
 @router.get("/audit/export.csv")
 def export_csv(
     db: DbDep,
-    _: AdminUser,
+    _: AdminUserOrTicket,
     user_id: int | None = None,
     action: AuditAction | None = None,
     file_id: int | None = None,

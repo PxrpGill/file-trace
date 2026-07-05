@@ -86,3 +86,17 @@ def test_csv_export(client, admin):
     lines = response.text.strip().splitlines()
     assert lines[0].startswith("id,created_at,username,action")
     assert any("folder_create" in line for line in lines[1:])
+
+
+def test_csv_export_with_ticket(client, admin):
+    admin_h = auth_header(client, "admin", "admin-pass")
+    ticket = client.post("/api/auth/download-ticket", headers=admin_h).json()["ticket"]
+    response = client.get(f"/api/audit/export.csv?ticket={ticket}")
+    assert response.status_code == 200
+
+
+def test_csv_export_ticket_requires_admin(client, user):
+    alice_h = auth_header(client, "alice", "alice-pass")
+    ticket = client.post("/api/auth/download-ticket", headers=alice_h).json()["ticket"]
+    response = client.get(f"/api/audit/export.csv?ticket={ticket}")
+    assert response.status_code == 403
