@@ -1,13 +1,24 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/shared/api'
 
-export function useCreateVersionMutation() {
+export function useCreateVersionMutation(fileId: number) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ fileId, file }: { fileId: number; file: globalThis.File }) => {
+    mutationKey: ['create-version', fileId],
+    mutationFn: async ({
+      file,
+      onProgress,
+    }: {
+      file: globalThis.File
+      onProgress?: (percent: number) => void
+    }) => {
       const form = new FormData()
       form.append('upload', file)
-      await api.post(`/api/files/${fileId}/versions`, form)
+      await api.post(`/api/files/${fileId}/versions`, form, {
+        onUploadProgress: (e) => {
+          if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
+        },
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tree'] })
