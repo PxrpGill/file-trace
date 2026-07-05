@@ -12,8 +12,8 @@ import '@fontsource/ibm-plex-mono/cyrillic-400.css'
 import '@fontsource/ibm-plex-mono/cyrillic-600.css'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/600.css'
-import './styles.css'
-import App from './App'
+import './app/styles/styles.css'
+import App from './app'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

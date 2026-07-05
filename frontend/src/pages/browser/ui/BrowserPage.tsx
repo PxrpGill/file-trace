@@ -1,0 +1,175 @@
+import { useState } from 'react'
+import { useSession } from '@/entities/session'
+import type { FolderNode } from '@/entities/folder'
+import { useFolderTreeQuery } from '@/entities/folder'
+import type { FileItem } from '@/entities/file'
+import { useFilesQuery } from '@/entities/file'
+import { formatDate, formatSize } from '@/shared/lib'
+import { Modal } from '@/shared/ui'
+import { FolderTree } from '@/widgets/folder-tree'
+import { FileDrawer } from '@/widgets/file-drawer'
+import { CreateFolderAction } from '@/features/folder/create'
+import { RenameFolderAction } from '@/features/folder/rename'
+import { DeleteFolderAction } from '@/features/folder/delete'
+import { UploadFileButton, useUploadFileMutation } from '@/features/file/upload-file'
+import { UploadVersionButton } from '@/features/file/create-version'
+import { RenameFileAction, MoveFileAction } from '@/features/file/rename-move-file'
+import { DeleteFileAction } from '@/features/file/delete-file'
+import { DownloadFileButton } from '@/features/file/download-file'
+
+export function BrowserPage() {
+  const { user } = useSession()
+  const [selected, setSelected] = useState<FolderNode | null>(null)
+  const [openFile, setOpenFile] = useState<FileItem | null>(null)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  const tree = useFolderTreeQuery()
+  const files = useFilesQuery(selected?.id ?? null)
+  const uploadFile = useUploadFileMutation(selected?.id ?? null)
+
+  const canWrite = selected?.level === 'write'
+  const isAdmin = user?.role === 'admin'
+
+  return (
+    <div className="browser">
+      <aside className="sidebar">
+        <h2>Папки</h2>
+        <FolderTree
+          nodes={tree.data ?? []}
+          selectedId={selected?.id ?? null}
+          onSelect={(node) => {
+            setSelected(node)
+            setOpenFile(null)
+          }}
+        />
+        {isAdmin && (
+          <CreateFolderAction
+            parentId={null}
+            buttonLabel="+ Корневая папка"
+            buttonClassName="btn secondary small"
+            dialogTitle="Новая корневая папка"
+            onError={setErrorMessage}
+          />
+        )}
+      </aside>
+
+      <main
+        className="content"
+        onDragOver={(e) => {
+          if (canWrite) e.preventDefault()
+        }}
+        onDrop={(e) => {
+          if (!canWrite) return
+          e.preventDefault()
+          for (const f of Array.from(e.dataTransfer.files)) {
+            uploadFile.mutate(f, { onError: () => setErrorMessage('Не удалось загрузить файл') })
+          }
+        }}
+      >
+        {selected === null ? (
+          <div className="empty">Выберите папку слева, чтобы увидеть файлы</div>
+        ) : (
+          <>
+            <div className="content-head">
+              <h1>{selected.name}</h1>
+              <span className="muted">
+                {canWrite ? 'чтение и изменение' : 'только чтение'}
+              </span>
+              <span className="spacer" />
+              {canWrite && (
+                <>
+                  <UploadFileButton folderId={selected.id} onError={setErrorMessage} />
+                  <CreateFolderAction
+                    parentId={selected.id}
+                    buttonLabel="+ Папка"
+                    dialogTitle={`Новая папка в «${selected.name}»`}
+                    onError={setErrorMessage}
+                  />
+                  <RenameFolderAction
+                    folder={selected}
+                    onRenamed={(name) => setSelected({ ...selected, name })}
+                    onError={setErrorMessage}
+                  />
+                  <DeleteFolderAction
+                    folder={selected}
+                    onDeleted={() => setSelected(null)}
+                    onError={setErrorMessage}
+                  />
+                </>
+              )}
+            </div>
+
+            {(files.data ?? []).length === 0 ? (
+              <div className="empty">
+                В папке пока нет файлов
+                {canWrite && ' — перетащите файл сюда или нажмите «Загрузить файл»'}
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Имя</th>
+                      <th>Размер</th>
+                      <th>Версия</th>
+                      <th>Обновлён</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(files.data ?? []).map((file) => (
+                      <tr key={file.id}>
+                        <td>
+                          <span
+                            className="file-name"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setOpenFile(file)}
+                            onKeyDown={(e) => e.key === 'Enter' && setOpenFile(file)}
+                          >
+                            {file.name}
+                          </span>
+                        </td>
+                        <td className="mono">
+                          {file.current_version ? formatSize(file.current_version.size) : '—'}
+                        </td>
+                        <td className="mono">v{file.current_version?.version_no ?? 0}</td>
+                        <td className="mono">
+                          {file.current_version ? formatDate(file.current_version.created_at) : '—'}
+                        </td>
+                        <td className="actions">
+                          <DownloadFileButton url={`/api/files/${file.id}/download`} />{' '}
+                          {canWrite && (
+                            <>
+                              <UploadVersionButton file={file} onError={setErrorMessage} />{' '}
+                              <RenameFileAction file={file} />{' '}
+                              <MoveFileAction file={file} onError={setErrorMessage} />{' '}
+                              <DeleteFileAction file={file} onDeleted={() => setOpenFile(null)} />
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </main>
+
+      {openFile && <FileDrawer file={openFile} onClose={() => setOpenFile(null)} />}
+
+      {errorMessage && (
+        <Modal title="Не получилось" onClose={() => setErrorMessage('')}>
+          <p style={{ margin: 0 }}>{errorMessage}</p>
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setErrorMessage('')}>
+              Понятно
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}

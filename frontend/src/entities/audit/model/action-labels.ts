@@ -1,0 +1,23 @@
+import type { AuditAction } from './types'
+
+export const ACTION_LABELS: Record<AuditAction, string> = {
+  login: 'Вход',
+  login_failed: 'Неудачный вход',
+  logout: 'Выход',
+  file_upload: 'Загрузка файла',
+  file_download: 'Скачивание',
+  file_new_version: 'Новая версия',
+  file_rename: 'Переименование файла',
+  file_move: 'Перемещение файла',
+  file_delete: 'Удаление файла',
+  file_restore: 'Восстановление файла',
+  file_purge: 'Окончательное удаление',
+  folder_create: 'Создание папки',
+  folder_rename: 'Переименование папки',
+  folder_delete: 'Удаление папки',
+  user_create: 'Создание пользователя',
+  user_update: 'Изменение пользователя',
+  user_password_reset: 'Сброс пароля',
+  permission_grant: 'Выдача права',
+  permission_revoke: 'Отзыв права',
+}
