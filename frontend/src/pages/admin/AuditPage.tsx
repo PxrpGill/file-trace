@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { api, downloadBlob } from '../../api/client'
+import { api, triggerDownload } from '../../api/client'
 import type { AuditAction, AuditPage as AuditPageData, User } from '../../api/types'
 import { ACTION_LABELS, formatDate } from '../../api/types'
 
@@ -38,7 +38,7 @@ export function AuditPage() {
         .filter(([k]) => k !== 'limit' && k !== 'offset')
         .map(([k, v]) => [k, String(v)]),
     )
-    downloadBlob(`/api/audit/export.csv?${query}`, 'audit.csv')
+    triggerDownload(`/api/audit/export.csv?${query}`)
   }
 
   const total = journal.data?.total ?? 0

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { api, downloadBlob } from '../api/client'
+import { api, triggerDownload } from '../api/client'
 import type { AuditEntry, FileItem, FileVersion } from '../api/types'
 import { ACTION_LABELS, formatDate, formatSize } from '../api/types'
 
@@ -52,10 +52,7 @@ export function FileDrawer({ file, onClose }: { file: FileItem; onClose: () => v
               <button
                 className="btn secondary small"
                 onClick={() =>
-                  downloadBlob(
-                    `/api/files/${file.id}/download?version_id=${v.id}`,
-                    file.name,
-                  )
+                  triggerDownload(`/api/files/${file.id}/download?version_id=${v.id}`)
                 }
               >
                 Скачать

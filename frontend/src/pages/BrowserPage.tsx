@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { api, downloadBlob } from '../api/client'
+import { api, triggerDownload } from '../api/client'
 import type { FileItem, FolderNode } from '../api/types'
 import { formatDate, formatSize } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
@@ -196,7 +196,7 @@ export function BrowserPage() {
                           <button
                             className="btn secondary small"
                             onClick={() =>
-                              downloadBlob(`/api/files/${file.id}/download`, file.name)
+                              triggerDownload(`/api/files/${file.id}/download`)
                             }
                           >
                             Скачать
