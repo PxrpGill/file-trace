@@ -3,13 +3,13 @@ import { TextPromptModal } from '@/shared/ui'
 import type { FileItem } from '@/entities/file'
 import { useUpdateFileMutation } from '../model/use-update-file'
 
-export function RenameFileAction({ file }: { file: FileItem }) {
+export function RenameFileAction({ file, disabled }: { file: FileItem; disabled?: boolean }) {
   const [open, setOpen] = useState(false)
   const updateFile = useUpdateFileMutation()
 
   return (
     <>
-      <button className="btn secondary small" onClick={() => setOpen(true)}>
+      <button className="btn secondary small" disabled={disabled} onClick={() => setOpen(true)}>
         Переименовать
       </button>
       {open && (

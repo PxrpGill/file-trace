@@ -6,9 +6,11 @@ import { useUpdateFileMutation } from '../model/use-update-file'
 
 export function MoveFileAction({
   file,
+  disabled,
   onError,
 }: {
   file: FileItem
+  disabled?: boolean
   onError?: (message: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -18,7 +20,7 @@ export function MoveFileAction({
 
   return (
     <>
-      <button className="btn secondary small" onClick={() => setOpen(true)}>
+      <button className="btn secondary small" disabled={disabled} onClick={() => setOpen(true)}>
         Переместить
       </button>
       {open && (

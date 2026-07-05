@@ -3,13 +3,21 @@ import { ConfirmModal } from '@/shared/ui'
 import type { FileItem } from '@/entities/file'
 import { useDeleteFileMutation } from '../model/use-delete-file'
 
-export function DeleteFileAction({ file, onDeleted }: { file: FileItem; onDeleted?: () => void }) {
+export function DeleteFileAction({
+  file,
+  disabled,
+  onDeleted,
+}: {
+  file: FileItem
+  disabled?: boolean
+  onDeleted?: () => void
+}) {
   const [open, setOpen] = useState(false)
   const deleteFile = useDeleteFileMutation()
 
   return (
     <>
-      <button className="btn danger small" onClick={() => setOpen(true)}>
+      <button className="btn danger small" disabled={disabled} onClick={() => setOpen(true)}>
         Удалить
       </button>
       {open && (
