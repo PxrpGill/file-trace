@@ -15,3 +15,11 @@ export interface FileItem {
   is_deleted: boolean
   current_version: FileVersion | null
 }
+
+export interface FileSearchResult {
+  id: number
+  folder_id: number
+  folder_name: string
+  name: string
+  current_version: FileVersion | null
+}

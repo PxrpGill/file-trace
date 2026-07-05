@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -10,15 +10,18 @@ from app.models import (
     AuditAction,
     File,
     FileVersion,
+    Folder,
     PermissionLevel,
     User,
 )
-from app.schemas.files import FileOut, FileUpdate, FileVersionOut
+from app.schemas.files import FileOut, FileSearchResult, FileUpdate, FileVersionOut
 from app.services import audit
-from app.services.permissions import require_folder_access
+from app.services.permissions import accessible_levels, require_folder_access
 from app.services.storage import FileStorage
 
 router = APIRouter(prefix="/api", tags=["files"])
+
+MIN_SEARCH_QUERY_LENGTH = 2
 
 
 def _get_file(
@@ -62,6 +65,45 @@ def list_files(folder_id: int, db: DbDep, user: ActiveUser) -> list[File]:
         .order_by(File.name)
         .all()
     )
+
+
+@router.get("/files/search", response_model=list[FileSearchResult])
+def search_files(
+    db: DbDep,
+    user: ActiveUser,
+    q: str = Query(..., min_length=1, max_length=255),
+    limit: int = Query(default=50, le=100),
+) -> list[FileSearchResult]:
+    term = q.strip()
+    if len(term) < MIN_SEARCH_QUERY_LENGTH:
+        return []
+
+    folder_ids = list(accessible_levels(db, user).keys())
+    if not folder_ids:
+        return []
+
+    # Read-only listing, like list_files/list_versions — no audit record,
+    # since it discloses nothing beyond what browsing folders already reveals.
+    rows = (
+        db.query(File, Folder.name)
+        .join(Folder, File.folder_id == Folder.id)
+        .filter(File.folder_id.in_(folder_ids))
+        .filter(File.is_deleted.is_(False))
+        .filter(File.name.ilike(f"%{term}%"))
+        .order_by(File.name)
+        .limit(limit)
+        .all()
+    )
+    return [
+        FileSearchResult(
+            id=file.id,
+            folder_id=file.folder_id,
+            folder_name=folder_name,
+            name=file.name,
+            current_version=file.current_version,
+        )
+        for file, folder_name in rows
+    ]
 
 
 @router.post(

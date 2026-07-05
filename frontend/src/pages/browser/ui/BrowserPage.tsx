@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useSession } from '@/entities/session'
 import type { FolderNode } from '@/entities/folder'
-import { useFolderTreeQuery } from '@/entities/folder'
+import { useFolderTreeQuery, flattenTree } from '@/entities/folder'
 import type { FileItem } from '@/entities/file'
 import { useFilesQuery } from '@/entities/file'
 import { formatDate, formatSize } from '@/shared/lib'
@@ -22,10 +23,31 @@ export function BrowserPage() {
   const [selected, setSelected] = useState<FolderNode | null>(null)
   const [openFile, setOpenFile] = useState<FileItem | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const tree = useFolderTreeQuery()
   const files = useFilesQuery(selected?.id ?? null)
   const uploadFile = useUploadFileMutation(selected?.id ?? null)
+
+  useEffect(() => {
+    const folderParam = searchParams.get('folder')
+    if (!folderParam || !tree.data) return
+    const folderId = Number(folderParam)
+    if (selected?.id === folderId) return
+    const match = flattenTree(tree.data).find((n) => n.node.id === folderId)
+    if (match) setSelected(match.node)
+  }, [searchParams, tree.data])
+
+  useEffect(() => {
+    const fileParam = searchParams.get('file')
+    if (!fileParam || !files.data) return
+    const fileId = Number(fileParam)
+    const match = files.data.find((f) => f.id === fileId)
+    if (match) {
+      setOpenFile(match)
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, files.data])
 
   const canWrite = selected?.level === 'write'
   const isAdmin = user?.role === 'admin'

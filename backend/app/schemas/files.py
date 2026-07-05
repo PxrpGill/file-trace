@@ -28,3 +28,13 @@ class FileOut(BaseModel):
 class FileUpdate(BaseModel):
     name: str | None = None
     folder_id: int | None = None
+
+
+class FileSearchResult(BaseModel):
+    id: int
+    folder_id: int
+    folder_name: str
+    name: str
+    current_version: FileVersionOut | None
+
+    model_config = {"from_attributes": True}

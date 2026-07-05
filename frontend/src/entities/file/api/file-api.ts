@@ -1,13 +1,23 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/shared/api'
 import type { AuditEntry } from '@/entities/audit'
-import type { FileItem, FileVersion } from '../model/types'
+import type { FileItem, FileSearchResult, FileVersion } from '../model/types'
 
 export function useFilesQuery(folderId: number | null) {
   return useQuery({
     queryKey: ['files', folderId],
     enabled: folderId !== null,
     queryFn: async () => (await api.get<FileItem[]>(`/api/folders/${folderId}/files`)).data,
+  })
+}
+
+export function useFileSearchQuery(query: string) {
+  const term = query.trim()
+  return useQuery({
+    queryKey: ['file-search', term],
+    enabled: term.length >= 2,
+    queryFn: async () =>
+      (await api.get<FileSearchResult[]>('/api/files/search', { params: { q: term } })).data,
   })
 }
 

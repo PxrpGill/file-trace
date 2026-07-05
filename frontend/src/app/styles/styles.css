@@ -60,7 +60,7 @@ button, input, select {
 .btn.small { padding: 3px 9px; font-size: 13px; }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
-input[type='text'], input[type='password'], input[type='date'], select {
+input[type='text'], input[type='password'], input[type='date'], input[type='search'], select {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 7px 10px;
@@ -132,7 +132,7 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
   background: var(--wax);
   display: inline-block;
 }
-.topbar nav { display: flex; gap: 4px; flex: 1; }
+.topbar nav { display: flex; gap: 4px; flex: 0 0 auto; }
 .topbar nav a {
   color: #c8d2e0;
   text-decoration: none;
@@ -143,6 +143,53 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
 .topbar nav a:hover { color: #fff; }
 .topbar .who { font-size: 13px; color: #c8d2e0; }
 .topbar .who b { color: #fff; }
+
+.global-search {
+  position: relative;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+.global-search input {
+  width: 100%;
+  max-width: 420px;
+}
+.search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(27, 42, 65, 0.18);
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 20;
+  color: var(--ink);
+}
+.search-results li {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+.search-results li:hover { background: var(--surface); }
+.search-results li.empty {
+  cursor: default;
+  color: var(--steel);
+  justify-content: center;
+}
+.search-results li.empty:hover { background: transparent; }
+.search-results .folder-name { color: var(--steel); white-space: nowrap; }
 
 /* ---------- browser layout ---------- */
 

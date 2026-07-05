@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useSession } from '@/entities/session'
 import { LogoutButton } from '@/features/auth/logout'
+import { GlobalSearch } from './GlobalSearch'
 
 export function AppLayout() {
   const { user } = useSession()
@@ -18,6 +19,7 @@ export function AppLayout() {
           </NavLink>
           {user?.role === 'admin' && <NavLink to="/admin">Администрирование</NavLink>}
         </nav>
+        <GlobalSearch />
         <span className="who">
           <b>{user?.full_name || user?.username}</b>
           {user?.role === 'admin' && ' · администратор'}
