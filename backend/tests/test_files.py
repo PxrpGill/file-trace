@@ -190,3 +190,47 @@ def test_purge_removes_permanently(client, db, admin):
     assert db.query(AuditLog).filter_by(action=AuditAction.file_purge).count() == 1
     # download after purge is impossible
     assert client.get(f"/api/files/{body['id']}/download", headers=admin_h).status_code == 404
+
+
+def test_download_with_ticket_instead_of_header(client, admin):
+    admin_h = auth_header(client, "admin", "admin-pass")
+    docs = setup_folder(client, admin_h)
+    body = upload(client, admin_h, docs["id"], "a.txt", b"file-content")
+
+    ticket = client.post("/api/auth/download-ticket", headers=admin_h).json()["ticket"]
+    response = client.get(f"/api/files/{body['id']}/download?ticket={ticket}")
+    assert response.status_code == 200
+    assert response.content == b"file-content"
+
+
+def test_download_with_expired_ticket_rejected(client, admin):
+    import jwt
+    from datetime import datetime, timedelta, timezone
+
+    from app.config import settings
+
+    admin_h = auth_header(client, "admin", "admin-pass")
+    docs = setup_folder(client, admin_h)
+    body = upload(client, admin_h, docs["id"], "a.txt")
+
+    expired = jwt.encode(
+        {
+            "sub": str(admin.id),
+            "aud": "download",
+            "exp": datetime.now(timezone.utc) - timedelta(seconds=5),
+        },
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+    response = client.get(f"/api/files/{body['id']}/download?ticket={expired}")
+    assert response.status_code == 401
+
+
+def test_download_ticket_cannot_be_used_as_bearer_token(client, admin):
+    admin_h = auth_header(client, "admin", "admin-pass")
+    docs = setup_folder(client, admin_h)
+    upload(client, admin_h, docs["id"], "a.txt")
+
+    ticket = client.post("/api/auth/download-ticket", headers=admin_h).json()["ticket"]
+    response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {ticket}"})
+    assert response.status_code == 401

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import ActiveUser, AdminUser, DbDep, StorageDep, client_ip
+from app.api.deps import ActiveUser, ActiveUserOrTicket, AdminUser, DbDep, StorageDep, client_ip
 from app.models import (
     AuditAction,
     File,
@@ -116,7 +116,7 @@ def list_trash(db: DbDep, _: AdminUser) -> list[File]:
 def download_file(
     file_id: int,
     db: DbDep,
-    user: ActiveUser,
+    user: ActiveUserOrTicket,
     storage: StorageDep,
     request: Request,
     version_id: int | None = None,
