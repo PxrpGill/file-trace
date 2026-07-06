@@ -14,6 +14,7 @@ import { CreateFolderAction } from '@/features/folder/create'
 import { RenameFolderAction } from '@/features/folder/rename'
 import { DeleteFolderAction } from '@/features/folder/delete'
 import { UploadFileButton, useUploadFileMutation } from '@/features/file/upload-file'
+import { UploadTreeButton } from '@/features/file/upload-tree'
 import { UploadVersionButton } from '@/features/file/create-version'
 import { RenameFileAction, MoveFileAction } from '@/features/file/rename-move-file'
 import { DeleteFileAction } from '@/features/file/delete-file'
@@ -108,6 +109,7 @@ export function BrowserPage() {
               {canWrite && (
                 <>
                   <UploadFileButton folderId={selected.id} onError={setErrorMessage} />
+                  <UploadTreeButton folderId={selected.id} onError={setErrorMessage} />
                   <CreateFolderAction
                     parentId={selected.id}
                     buttonLabel="+ Папка"
