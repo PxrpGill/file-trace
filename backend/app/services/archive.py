@@ -44,6 +44,10 @@ class UnsafeArchivePathError(Exception):
         self.path = path
 
 
+class CorruptArchiveError(Exception):
+    """The archive is malformed, truncated, or otherwise unreadable."""
+
+
 class ArchiveReader(Protocol):
     def entries(self) -> list[ArchiveEntry]: ...
     def read(self, path: str) -> bytes: ...
@@ -52,7 +56,10 @@ class ArchiveReader(Protocol):
 
 class ZipArchiveReader:
     def __init__(self, stream: BinaryIO) -> None:
-        self._zip = zipfile.ZipFile(stream)
+        try:
+            self._zip = zipfile.ZipFile(stream)
+        except zipfile.BadZipFile as exc:
+            raise CorruptArchiveError(str(exc)) from exc
 
     def entries(self) -> list[ArchiveEntry]:
         return [
@@ -76,9 +83,16 @@ class RarArchiveReader:
                 "Распаковка RAR недоступна: не найден unrar/unar на сервере"
             )
         fd, self._tmp_path = tempfile.mkstemp(suffix=".rar")
-        with os.fdopen(fd, "wb") as tmp:
-            shutil.copyfileobj(stream, tmp)
-        self._rar = rarfile.RarFile(self._tmp_path)
+        try:
+            with os.fdopen(fd, "wb") as tmp:
+                shutil.copyfileobj(stream, tmp)
+            self._rar = rarfile.RarFile(self._tmp_path)
+        except rarfile.Error as exc:
+            os.unlink(self._tmp_path)
+            raise CorruptArchiveError(str(exc)) from exc
+        except Exception:
+            os.unlink(self._tmp_path)
+            raise
 
     def entries(self) -> list[ArchiveEntry]:
         return [
@@ -111,6 +125,9 @@ def is_unsafe_archive_path(path: str) -> bool:
 
 
 def validate_entries(entries: list[ArchiveEntry]) -> None:
+    for entry in entries:
+        if is_unsafe_archive_path(entry.path):
+            raise UnsafeArchivePathError(entry.path)
     if len(entries) > MAX_ENTRY_COUNT:
         raise ArchiveTooLargeError(
             f"Слишком много файлов в архиве: {len(entries)} (максимум {MAX_ENTRY_COUNT})"
@@ -120,6 +137,3 @@ def validate_entries(entries: list[ArchiveEntry]) -> None:
         raise ArchiveTooLargeError(
             f"Архив слишком большой в распакованном виде: {total_size} байт"
         )
-    for entry in entries:
-        if is_unsafe_archive_path(entry.path):
-            raise UnsafeArchivePathError(entry.path)

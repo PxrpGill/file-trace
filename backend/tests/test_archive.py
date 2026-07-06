@@ -1,4 +1,8 @@
+import glob
 import io
+import os
+import shutil as shutil_module
+import tempfile
 import zipfile
 
 import pytest
@@ -6,6 +10,7 @@ import pytest
 from app.services.archive import (
     ArchiveEntry,
     ArchiveTooLargeError,
+    CorruptArchiveError,
     UnsafeArchivePathError,
     UnsupportedArchiveError,
     open_archive,
@@ -69,3 +74,27 @@ def test_validate_entries_accepts_safe_entries():
         ArchiveEntry(path="sub/", is_dir=True, size=0),
     ]
     validate_entries(entries)
+
+
+def test_open_archive_rejects_corrupt_zip():
+    with pytest.raises(CorruptArchiveError):
+        open_archive("bundle.zip", io.BytesIO(b"not a real zip file"))
+
+
+def test_validate_entries_path_safety_checked_before_count_limit():
+    entries = [ArchiveEntry(path=f"{i}.txt", is_dir=False, size=1) for i in range(10_001)]
+    entries.append(ArchiveEntry(path="../evil.txt", is_dir=False, size=1))
+    with pytest.raises(UnsafeArchivePathError):
+        validate_entries(entries)
+
+
+@pytest.mark.skipif(
+    shutil_module.which("unrar") is None and shutil_module.which("unar") is None,
+    reason="no unrar/unar binary available",
+)
+def test_rar_corrupt_archive_does_not_leak_temp_file():
+    before = set(glob.glob(os.path.join(tempfile.gettempdir(), "*.rar")))
+    with pytest.raises(CorruptArchiveError):
+        open_archive("bundle.rar", io.BytesIO(b"not a real rar file"))
+    after = set(glob.glob(os.path.join(tempfile.gettempdir(), "*.rar")))
+    assert after - before == set()
