@@ -39,6 +39,8 @@ def test_extract_zip_creates_tree_and_audits(client, db, admin):
     extract_record = db.query(AuditLog).filter_by(action=AuditAction.file_extract).one()
     assert extract_record.file_id == body["id"]
     assert extract_record.details["files"] == 2
+    assert extract_record.details["name"] == "bundle.zip"
+    assert extract_record.details["total_size"] == 11
 
 
 def test_extract_reuses_existing_destination_folder(client, db, admin):

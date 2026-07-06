@@ -333,7 +333,7 @@ def extract_archive(
             validate_entries(entries)
         except ArchiveTooLargeError as exc:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)
             )
         except UnsafeArchivePathError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

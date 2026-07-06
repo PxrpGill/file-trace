@@ -6,6 +6,7 @@ whatever intermediate folders are missing, and save each file either as
 a brand new File or as a new FileVersion of an existing one.
 """
 
+import mimetypes
 from typing import BinaryIO
 
 from sqlalchemy.orm import Session
@@ -83,7 +84,7 @@ def save_file_content(
         file=file,
         version_no=len(file.versions) + 1,
         size=blob.size,
-        mime_type=content_type or "application/octet-stream",
+        mime_type=content_type or mimetypes.guess_type(name)[0] or "application/octet-stream",
         sha256=blob.sha256,
         storage_key=blob.key,
         uploaded_by=user.id,
