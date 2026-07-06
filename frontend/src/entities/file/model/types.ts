@@ -23,3 +23,10 @@ export interface FileSearchResult {
   name: string
   current_version: FileVersion | null
 }
+
+const ARCHIVE_EXTENSIONS = ['.zip', '.rar']
+
+export function isArchiveFile(name: string): boolean {
+  const lower = name.toLowerCase()
+  return ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(ext))
+}

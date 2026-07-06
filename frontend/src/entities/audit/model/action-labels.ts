@@ -12,6 +12,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   file_delete: 'Удаление файла',
   file_restore: 'Восстановление файла',
   file_purge: 'Окончательное удаление',
+  file_extract: 'Распаковка архива',
   folder_create: 'Создание папки',
   folder_rename: 'Переименование папки',
   folder_delete: 'Удаление папки',

@@ -1,4 +1,5 @@
 export type { FileItem, FileSearchResult, FileVersion } from './model/types'
+export { isArchiveFile } from './model/types'
 export {
   useFilesQuery,
   useTrashQuery,
