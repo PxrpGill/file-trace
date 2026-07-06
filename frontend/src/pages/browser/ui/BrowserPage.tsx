@@ -4,7 +4,7 @@ import { useSession } from '@/entities/session'
 import type { FolderNode } from '@/entities/folder'
 import { useFolderTreeQuery, flattenTree } from '@/entities/folder'
 import type { FileItem } from '@/entities/file'
-import { useFilesQuery } from '@/entities/file'
+import { useFilesQuery, isArchiveFile } from '@/entities/file'
 import { useMutationState } from '@tanstack/react-query'
 import { formatDate, formatSize } from '@/shared/lib'
 import { Modal } from '@/shared/ui'
@@ -19,6 +19,7 @@ import { UploadVersionButton } from '@/features/file/create-version'
 import { RenameFileAction, MoveFileAction } from '@/features/file/rename-move-file'
 import { DeleteFileAction } from '@/features/file/delete-file'
 import { DownloadFileButton } from '@/features/file/download-file'
+import { ExtractArchiveAction } from '@/features/file/extract-archive'
 
 export function BrowserPage() {
   const { user } = useSession()
@@ -33,6 +34,12 @@ export function BrowserPage() {
   const uploadingVersionIds = new Set(
     useMutationState({
       filters: { mutationKey: ['create-version'], status: 'pending' },
+      select: (mutation) => mutation.options.mutationKey?.[1] as number,
+    }),
+  )
+  const extractingIds = new Set(
+    useMutationState({
+      filters: { mutationKey: ['extract'], status: 'pending' },
       select: (mutation) => mutation.options.mutationKey?.[1] as number,
     }),
   )
@@ -150,6 +157,8 @@ export function BrowserPage() {
                   <tbody>
                     {(files.data ?? []).map((file) => {
                       const versionUploading = uploadingVersionIds.has(file.id)
+                      const extracting = extractingIds.has(file.id)
+                      const rowBusy = versionUploading || extracting
                       return (
                       <tr key={file.id}>
                         <td>
@@ -173,24 +182,33 @@ export function BrowserPage() {
                         <td className="actions">
                           <DownloadFileButton
                             url={`/api/files/${file.id}/download`}
-                            disabled={versionUploading}
+                            disabled={rowBusy}
                           />{' '}
                           {canWrite && (
                             <>
                               <UploadVersionButton
                                 file={file}
-                                disabled={versionUploading}
+                                disabled={rowBusy}
                                 onError={setErrorMessage}
                               />{' '}
-                              <RenameFileAction file={file} disabled={versionUploading} />{' '}
+                              {isArchiveFile(file.name) && (
+                                <>
+                                  <ExtractArchiveAction
+                                    file={file}
+                                    disabled={rowBusy}
+                                    onError={setErrorMessage}
+                                  />{' '}
+                                </>
+                              )}
+                              <RenameFileAction file={file} disabled={rowBusy} />{' '}
                               <MoveFileAction
                                 file={file}
-                                disabled={versionUploading}
+                                disabled={rowBusy}
                                 onError={setErrorMessage}
                               />{' '}
                               <DeleteFileAction
                                 file={file}
-                                disabled={versionUploading}
+                                disabled={rowBusy}
                                 onDeleted={() => setOpenFile(null)}
                               />
                             </>
