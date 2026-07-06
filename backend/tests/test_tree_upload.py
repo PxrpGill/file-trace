@@ -1,6 +1,6 @@
 import io
 
-from app.models import Folder
+from app.models import AuditAction, AuditLog, Folder
 from app.services.storage import LocalDiskStorage
 from app.services.tree_upload import (
     get_or_create_child_folder,
@@ -28,6 +28,12 @@ def test_resolve_folder_path_creates_nested_folders_and_audits(db, admin):
     a = db.query(Folder).filter_by(parent_id=root.id, name="a").one()
     b = db.query(Folder).filter_by(parent_id=a.id, name="b").one()
     assert folder_id == b.id
+
+    record_a = db.query(AuditLog).filter_by(action=AuditAction.folder_create, folder_id=a.id).one()
+    assert record_a.user_id == admin.id
+
+    record_b = db.query(AuditLog).filter_by(action=AuditAction.folder_create, folder_id=b.id).one()
+    assert record_b.user_id == admin.id
 
 
 def test_resolve_folder_path_with_no_segments_returns_root(db, admin):
@@ -63,9 +69,17 @@ def test_save_file_content_creates_then_new_version(db, admin, tmp_path):
     assert file.current_version.version_no == 1
     assert file.current_version.size == 2
 
+    record_upload = db.query(AuditLog).filter_by(action=AuditAction.file_upload).one()
+    assert record_upload.file_id == file.id
+    assert record_upload.details == {"name": "a.txt", "size": 2}
+
     file2 = save_file_content(
         db, storage, root.id, "a.txt", io.BytesIO(b"v2-bytes"), "text/plain", admin, None
     )
     db.commit()
     assert file2.id == file.id
     assert file2.current_version.version_no == 2
+
+    record_version = db.query(AuditLog).filter_by(action=AuditAction.file_new_version).one()
+    assert record_version.file_id == file2.id
+    assert record_version.details == {"name": "a.txt", "version_no": 2, "size": 8}
