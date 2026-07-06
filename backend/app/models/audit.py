@@ -20,6 +20,7 @@ class AuditAction(str, enum.Enum):
     file_delete = "file_delete"
     file_restore = "file_restore"
     file_purge = "file_purge"
+    file_extract = "file_extract"
     folder_create = "folder_create"
     folder_rename = "folder_rename"
     folder_delete = "folder_delete"
