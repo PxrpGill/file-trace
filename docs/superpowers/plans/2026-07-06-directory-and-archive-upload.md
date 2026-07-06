@@ -869,6 +869,15 @@ def test_extract_rejects_unsupported_extension(client, admin):
     assert response.status_code == 400
 
 
+def test_extract_rejects_corrupt_archive(client, admin):
+    admin_h = auth_header(client, "admin", "admin-pass")
+    root = make_folder(client, admin_h, "Root")
+    body = upload(client, admin_h, root["id"], "broken.zip", b"not actually a zip file")
+
+    response = client.post(f"/api/files/{body['id']}/extract", headers=admin_h)
+    assert response.status_code == 400
+
+
 @pytest.mark.skipif(
     shutil.which("unrar") is None and shutil.which("unar") is None,
     reason="no unrar/unar binary available in this environment",
@@ -904,12 +913,15 @@ In `backend/app/api/files.py`:
 from app.services.archive import (
     ArchiveToolUnavailableError,
     ArchiveTooLargeError,
+    CorruptArchiveError,
     UnsafeArchivePathError,
     UnsupportedArchiveError,
     open_archive,
     validate_entries,
 )
 ```
+
+Note: `CorruptArchiveError` was added to `app/services/archive.py` during Task 3's review fix round (a corrupt/truncated `.zip`/`.rar` now raises this instead of a raw `zipfile`/`rarfile` exception) — it didn't exist when this plan was first written, but it's already in the codebase by the time you implement this task. Confirm it's exported from `app/services/archive.py` before using it; if the name differs, use whatever the actual module exports.
 
 4. Add the endpoint (placed after `upload_new_version`):
 
@@ -951,6 +963,10 @@ def extract_archive(
         )
     except ArchiveToolUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except CorruptArchiveError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Не удалось распаковать архив"
+        )
 
     try:
         entries = archive.entries()
@@ -1014,7 +1030,7 @@ If you don't have such a tool, skip this step — `test_extract_rar_archive` wil
 - [ ] **Step 7: Run tests to verify they pass**
 
 Run: `cd backend && uv run pytest tests/test_extract.py -v`
-Expected: PASS (7 tests passing, `test_extract_rar_archive` SKIPPED unless you completed Step 6 on a machine with `unar`/`unrar` installed)
+Expected: PASS (8 tests passing, `test_extract_rar_archive` SKIPPED unless you completed Step 6 on a machine with `unar`/`unrar` installed)
 
 Then run the full backend suite:
 
