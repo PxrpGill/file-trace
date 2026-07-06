@@ -14,10 +14,23 @@ from app.models import (
     PermissionLevel,
     User,
 )
-from app.schemas.files import FileOut, FileSearchResult, FileUpdate, FileVersionOut
+from app.schemas.files import (
+    ExtractResult,
+    FileOut,
+    FileSearchResult,
+    FileUpdate,
+    FileVersionOut,
+    UploadTreeResult,
+)
 from app.services import audit
 from app.services.permissions import accessible_levels, require_folder_access
 from app.services.storage import FileStorage
+from app.services.tree_upload import (
+    get_or_create_child_folder,
+    resolve_folder_path,
+    sanitize_relative_path,
+    save_file_content,
+)
 
 router = APIRouter(prefix="/api", tags=["files"])
 
@@ -147,6 +160,36 @@ def upload_file(
     )
     db.commit()
     return file
+
+
+@router.post(
+    "/folders/{folder_id}/upload-tree",
+    response_model=UploadTreeResult,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_tree(
+    folder_id: int,
+    files: list[UploadFile],
+    db: DbDep,
+    user: ActiveUser,
+    storage: StorageDep,
+    request: Request,
+) -> UploadTreeResult:
+    require_folder_access(db, user, folder_id, PermissionLevel.write)
+    ip = client_ip(request)
+    created = 0
+    for upload in files:
+        segments = sanitize_relative_path(upload.filename or "")
+        if not segments:
+            continue
+        *dirs, name = segments
+        target_folder_id = resolve_folder_path(db, folder_id, dirs, user.id, ip)
+        save_file_content(
+            db, storage, target_folder_id, name, upload.file, upload.content_type, user, ip
+        )
+        created += 1
+    db.commit()
+    return UploadTreeResult(files=created)
 
 
 @router.get("/files/trash", response_model=list[FileOut])
