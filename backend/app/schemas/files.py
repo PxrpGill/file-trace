@@ -38,3 +38,12 @@ class FileSearchResult(BaseModel):
     current_version: FileVersionOut | None
 
     model_config = {"from_attributes": True}
+
+
+class UploadTreeResult(BaseModel):
+    files: int
+
+
+class ExtractResult(BaseModel):
+    folder_id: int
+    files: int

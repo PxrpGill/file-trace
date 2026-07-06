@@ -1,3 +1,4 @@
+import io
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -14,10 +15,32 @@ from app.models import (
     PermissionLevel,
     User,
 )
-from app.schemas.files import FileOut, FileSearchResult, FileUpdate, FileVersionOut
+from app.schemas.files import (
+    ExtractResult,
+    FileOut,
+    FileSearchResult,
+    FileUpdate,
+    FileVersionOut,
+    UploadTreeResult,
+)
 from app.services import audit
+from app.services.archive import (
+    ArchiveToolUnavailableError,
+    ArchiveTooLargeError,
+    CorruptArchiveError,
+    UnsafeArchivePathError,
+    UnsupportedArchiveError,
+    open_archive,
+    validate_entries,
+)
 from app.services.permissions import accessible_levels, require_folder_access
 from app.services.storage import FileStorage
+from app.services.tree_upload import (
+    get_or_create_child_folder,
+    resolve_folder_path,
+    sanitize_relative_path,
+    save_file_content,
+)
 
 router = APIRouter(prefix="/api", tags=["files"])
 
@@ -149,6 +172,36 @@ def upload_file(
     return file
 
 
+@router.post(
+    "/folders/{folder_id}/upload-tree",
+    response_model=UploadTreeResult,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_tree(
+    folder_id: int,
+    files: list[UploadFile],
+    db: DbDep,
+    user: ActiveUser,
+    storage: StorageDep,
+    request: Request,
+) -> UploadTreeResult:
+    require_folder_access(db, user, folder_id, PermissionLevel.write)
+    ip = client_ip(request)
+    created = 0
+    for upload in files:
+        segments = sanitize_relative_path(upload.filename or "")
+        if not segments:
+            continue
+        *dirs, name = segments
+        target_folder_id = resolve_folder_path(db, folder_id, dirs, user.id, ip)
+        save_file_content(
+            db, storage, target_folder_id, name, upload.file, upload.content_type, user, ip
+        )
+        created += 1
+    db.commit()
+    return UploadTreeResult(files=created)
+
+
 @router.get("/files/trash", response_model=list[FileOut])
 def list_trash(db: DbDep, _: AdminUser) -> list[File]:
     return db.query(File).filter_by(is_deleted=True).order_by(File.deleted_at).all()
@@ -230,6 +283,94 @@ def upload_new_version(
     db.commit()
     db.refresh(file)
     return file
+
+
+ARCHIVE_EXTENSIONS = (".zip", ".rar")
+
+
+def _archive_base_name(name: str) -> str:
+    lower = name.lower()
+    for ext in ARCHIVE_EXTENSIONS:
+        if lower.endswith(ext):
+            return name[: -len(ext)]
+    return name
+
+
+@router.post("/files/{file_id}/extract", response_model=ExtractResult)
+def extract_archive(
+    file_id: int,
+    db: DbDep,
+    user: ActiveUser,
+    storage: StorageDep,
+    request: Request,
+) -> ExtractResult:
+    file = _get_file(db, user, file_id, PermissionLevel.write)
+    if not file.name.lower().endswith(ARCHIVE_EXTENSIONS):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Формат не поддерживается"
+        )
+    version = file.current_version
+    if version is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+
+    ip = client_ip(request)
+    try:
+        archive = open_archive(file.name, storage.open(version.storage_key))
+    except UnsupportedArchiveError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Формат не поддерживается"
+        )
+    except ArchiveToolUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except CorruptArchiveError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Не удалось распаковать архив"
+        )
+
+    try:
+        entries = archive.entries()
+        try:
+            validate_entries(entries)
+        except ArchiveTooLargeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)
+            )
+        except UnsafeArchivePathError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+        total_size = sum(e.size for e in entries if not e.is_dir)
+        dest_name = _archive_base_name(file.name)
+        dest_folder = get_or_create_child_folder(db, file.folder_id, dest_name, user.id, ip)
+
+        files_created = 0
+        for entry in entries:
+            segments = sanitize_relative_path(entry.path)
+            if not segments:
+                continue
+            if entry.is_dir:
+                resolve_folder_path(db, dest_folder.id, segments, user.id, ip)
+                continue
+            *dirs, name = segments
+            target_folder_id = resolve_folder_path(db, dest_folder.id, dirs, user.id, ip)
+            data = archive.read(entry.path)
+            save_file_content(
+                db, storage, target_folder_id, name, io.BytesIO(data), None, user, ip
+            )
+            files_created += 1
+    finally:
+        archive.close()
+
+    audit.record(
+        db,
+        AuditAction.file_extract,
+        user_id=user.id,
+        file_id=file.id,
+        folder_id=dest_folder.id,
+        ip=ip,
+        details={"name": file.name, "files": files_created, "total_size": total_size},
+    )
+    db.commit()
+    return ExtractResult(folder_id=dest_folder.id, files=files_created)
 
 
 @router.patch("/files/{file_id}", response_model=FileOut)
