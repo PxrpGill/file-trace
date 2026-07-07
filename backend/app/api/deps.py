@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import SessionLocal
 from app.models import User, UserRole
-from app.services.security import decode_access_token, decode_download_ticket
+from app.services.security import (
+    decode_access_token,
+    decode_download_ticket,
+    decode_preview_ticket,
+)
 from app.services.storage import FileStorage, LocalDiskStorage
 
 _bearer = HTTPBearer(auto_error=False)
@@ -80,29 +84,40 @@ def require_admin(user: ActiveUser) -> User:
 AdminUser = Annotated[User, Depends(require_admin)]
 
 
-def get_user_from_ticket_or_header(
-    db: DbDep,
-    request: Request,
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-) -> User:
-    """Like get_current_user, but also accepts a short-lived download ticket
-    via ?ticket= for browser-native downloads (see ActiveUserOrTicket)."""
-    unauthorized = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-    )
-    ticket = request.query_params.get("ticket")
-    if ticket is not None:
-        user_id = decode_download_ticket(ticket)
-    elif credentials is not None:
-        user_id = decode_access_token(credentials.credentials)
-    else:
-        raise unauthorized
-    if user_id is None:
-        raise unauthorized
-    user = db.get(User, user_id)
-    if user is None or not user.is_active:
-        raise unauthorized
-    return user
+def _make_ticket_or_header_dep(
+    decode_ticket_fn: Callable[[str], int | None],
+) -> Callable[[Session, Request, HTTPAuthorizationCredentials | None], User]:
+    """Builds a dependency like get_current_user, that also accepts a
+    short-lived ticket of one specific purpose via ?ticket= for browser-
+    native src/href requests that can't carry an Authorization header."""
+
+    def dep(
+        db: DbDep,
+        request: Request,
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    ) -> User:
+        unauthorized = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
+        ticket = request.query_params.get("ticket")
+        if ticket is not None:
+            user_id = decode_ticket_fn(ticket)
+        elif credentials is not None:
+            user_id = decode_access_token(credentials.credentials)
+        else:
+            raise unauthorized
+        if user_id is None:
+            raise unauthorized
+        user = db.get(User, user_id)
+        if user is None or not user.is_active:
+            raise unauthorized
+        return user
+
+    return dep
+
+
+get_user_from_ticket_or_header = _make_ticket_or_header_dep(decode_download_ticket)
+get_user_from_preview_ticket_or_header = _make_ticket_or_header_dep(decode_preview_ticket)
 
 
 def get_active_user_or_ticket(
@@ -116,6 +131,19 @@ def get_active_user_or_ticket(
 
 
 ActiveUserOrTicket = Annotated[User, Depends(get_active_user_or_ticket)]
+
+
+def get_active_user_or_preview_ticket(
+    user: Annotated[User, Depends(get_user_from_preview_ticket_or_header)],
+) -> User:
+    if user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Password change required"
+        )
+    return user
+
+
+ActiveUserOrPreviewTicket = Annotated[User, Depends(get_active_user_or_preview_ticket)]
 
 
 def require_admin_or_ticket(user: ActiveUserOrTicket) -> User:

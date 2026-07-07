@@ -30,3 +30,20 @@ export function isArchiveFile(name: string): boolean {
   const lower = name.toLowerCase()
   return ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(ext))
 }
+
+export type PreviewKind = 'image' | 'video' | 'pdf' | 'office'
+
+const PREVIEW_EXTENSIONS: Record<PreviewKind, string[]> = {
+  image: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'],
+  video: ['.mp4', '.webm'],
+  pdf: ['.pdf'],
+  office: ['.docx', '.doc', '.xlsx', '.xls'],
+}
+
+export function getPreviewKind(name: string): PreviewKind | null {
+  const lower = name.toLowerCase()
+  for (const kind of Object.keys(PREVIEW_EXTENSIONS) as PreviewKind[]) {
+    if (PREVIEW_EXTENSIONS[kind].some((ext) => lower.endsWith(ext))) return kind
+  }
+  return null
+}

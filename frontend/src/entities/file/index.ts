@@ -1,5 +1,5 @@
-export type { FileItem, FileSearchResult, FileVersion } from './model/types'
-export { isArchiveFile } from './model/types'
+export type { FileItem, FileSearchResult, FileVersion, PreviewKind } from './model/types'
+export { isArchiveFile, getPreviewKind } from './model/types'
 export {
   useFilesQuery,
   useTrashQuery,

@@ -6,7 +6,15 @@ from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import ActiveUser, ActiveUserOrTicket, AdminUser, DbDep, StorageDep, client_ip
+from app.api.deps import (
+    ActiveUser,
+    ActiveUserOrPreviewTicket,
+    ActiveUserOrTicket,
+    AdminUser,
+    DbDep,
+    StorageDep,
+    client_ip,
+)
 from app.models import (
     AuditAction,
     File,
@@ -34,6 +42,20 @@ from app.services.archive import (
     validate_entries,
 )
 from app.services.permissions import accessible_levels, require_folder_access
+from app.services.preview import (
+    PreviewConversionFailedError,
+    PreviewConversionTimeoutError,
+    PreviewKind,
+    PreviewRangeNotSatisfiableError,
+    PreviewSourceTooLargeError,
+    PreviewToolUnavailableError,
+    PreviewUnsupportedError,
+    convert_office_to_pdf,
+    get_preview_kind,
+    get_preview_mime,
+    iter_range,
+    parse_range_header,
+)
 from app.services.storage import FileStorage
 from app.services.tree_upload import (
     get_or_create_child_folder,
@@ -59,6 +81,18 @@ def _get_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     require_folder_access(db, user, file.folder_id, level)
     return file
+
+
+def _resolve_version(db: Session, file: File, version_id: int | None) -> FileVersion:
+    if version_id is None:
+        version = file.current_version
+    else:
+        version = db.get(FileVersion, version_id)
+        if version is not None and version.file_id != file.id:
+            version = None
+    if version is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    return version
 
 
 def _save_version(
@@ -217,14 +251,7 @@ def download_file(
     version_id: int | None = None,
 ) -> StreamingResponse:
     file = _get_file(db, user, file_id, PermissionLevel.read)
-    if version_id is None:
-        version = file.current_version
-    else:
-        version = db.get(FileVersion, version_id)
-        if version is None or version.file_id != file.id:
-            version = None
-    if version is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    version = _resolve_version(db, file, version_id)
 
     audit.record(
         db,
@@ -247,6 +274,104 @@ def download_file(
             "Content-Length": str(version.size),
         },
     )
+
+
+@router.get("/files/{file_id}/preview")
+def preview_file(
+    file_id: int,
+    db: DbDep,
+    user: ActiveUserOrPreviewTicket,
+    storage: StorageDep,
+    request: Request,
+    version_id: int | None = None,
+) -> StreamingResponse:
+    file = _get_file(db, user, file_id, PermissionLevel.read)
+    version = _resolve_version(db, file, version_id)
+
+    kind = get_preview_kind(file.name)
+    if kind is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Формат не поддерживается для предпросмотра",
+        )
+
+    if kind is PreviewKind.office:
+        if version.preview_key is None:
+            try:
+                blob = convert_office_to_pdf(
+                    storage, file.name, version.storage_key, version.size
+                )
+            except PreviewToolUnavailableError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+                )
+            except PreviewSourceTooLargeError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)
+                )
+            except PreviewConversionTimeoutError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(exc)
+                )
+            except PreviewConversionFailedError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)
+                )
+            version.preview_key = blob.key
+            version.preview_size = blob.size
+            db.flush()
+        stream_key = version.preview_key
+        stream_size = version.preview_size
+        content_type = "application/pdf"
+    else:
+        stream_key = version.storage_key
+        stream_size = version.size
+        content_type = get_preview_mime(file.name)
+
+    try:
+        byte_range = parse_range_header(request.headers.get("range"), stream_size)
+    except PreviewRangeNotSatisfiableError:
+        raise HTTPException(
+            status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
+            headers={"Content-Range": f"bytes */{stream_size}"},
+        )
+
+    # Video seeking fires many Range requests per viewing session — only
+    # audit the start of playback (no Range, or Range starting at 0), not
+    # every subsequent seek, to avoid flooding audit_log.
+    is_initial = byte_range is None or byte_range[0] == 0
+    if is_initial:
+        audit.record(
+            db,
+            AuditAction.file_preview,
+            user_id=user.id,
+            file_id=file.id,
+            folder_id=file.folder_id,
+            file_version_id=version.id,
+            ip=client_ip(request),
+            details={"name": file.name, "version_no": version.version_no, "kind": kind.value},
+        )
+    db.commit()
+
+    headers = {
+        "X-Content-Type-Options": "nosniff",
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f"inline; filename*=UTF-8''{quote(file.name)}",
+    }
+    handle = storage.open(stream_key)
+    if byte_range is not None:
+        start, end = byte_range
+        headers["Content-Range"] = f"bytes {start}-{end}/{stream_size}"
+        headers["Content-Length"] = str(end - start + 1)
+        return StreamingResponse(
+            iter_range(handle, start, end),
+            status_code=status.HTTP_206_PARTIAL_CONTENT,
+            media_type=content_type,
+            headers=headers,
+        )
+
+    headers["Content-Length"] = str(stream_size)
+    return StreamingResponse(handle, media_type=content_type, headers=headers)
 
 
 @router.get("/files/{file_id}/versions", response_model=list[FileVersionOut])
@@ -476,6 +601,8 @@ def purge_file(
     )
     for version in file.versions:
         storage.delete(version.storage_key)
+        if version.preview_key is not None:
+            storage.delete(version.preview_key)
         db.delete(version)
     db.delete(file)
     db.commit()

@@ -13,6 +13,7 @@ from app.services import audit
 from app.services.security import (
     create_access_token,
     create_download_ticket,
+    create_preview_ticket,
     hash_password,
     verify_password,
 )
@@ -58,6 +59,11 @@ def me(user: CurrentUser) -> User:
 @router.post("/download-ticket", response_model=DownloadTicketResponse)
 def download_ticket(user: ActiveUser) -> DownloadTicketResponse:
     return DownloadTicketResponse(ticket=create_download_ticket(user.id))
+
+
+@router.post("/preview-ticket", response_model=DownloadTicketResponse)
+def preview_ticket(user: ActiveUser) -> DownloadTicketResponse:
+    return DownloadTicketResponse(ticket=create_preview_ticket(user.id))
 
 
 @router.post("/change-password")

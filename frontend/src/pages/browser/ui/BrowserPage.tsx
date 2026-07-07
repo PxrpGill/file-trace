@@ -4,7 +4,7 @@ import { useSession } from '@/entities/session'
 import type { FolderNode } from '@/entities/folder'
 import { useFolderTreeQuery, flattenTree } from '@/entities/folder'
 import type { FileItem } from '@/entities/file'
-import { useFilesQuery, isArchiveFile } from '@/entities/file'
+import { useFilesQuery, isArchiveFile, getPreviewKind } from '@/entities/file'
 import { useMutationState } from '@tanstack/react-query'
 import { formatDate, formatSize } from '@/shared/lib'
 import { Modal } from '@/shared/ui'
@@ -20,11 +20,13 @@ import { RenameFileAction, MoveFileAction } from '@/features/file/rename-move-fi
 import { DeleteFileAction } from '@/features/file/delete-file'
 import { DownloadFileButton } from '@/features/file/download-file'
 import { ExtractArchiveAction } from '@/features/file/extract-archive'
+import { PreviewModal } from '@/features/file/preview-file'
 
 export function BrowserPage() {
   const { user } = useSession()
   const [selected, setSelected] = useState<FolderNode | null>(null)
   const [openFile, setOpenFile] = useState<FileItem | null>(null)
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -180,6 +182,17 @@ export function BrowserPage() {
                           {file.current_version ? formatDate(file.current_version.created_at) : '—'}
                         </td>
                         <td className="actions">
+                          {getPreviewKind(file.name) !== null && (
+                            <>
+                              <button
+                                className="btn secondary small"
+                                disabled={rowBusy}
+                                onClick={() => setPreviewFile(file)}
+                              >
+                                Просмотр
+                              </button>{' '}
+                            </>
+                          )}
                           <DownloadFileButton
                             url={`/api/files/${file.id}/download`}
                             disabled={rowBusy}
@@ -226,6 +239,8 @@ export function BrowserPage() {
       </main>
 
       {openFile && <FileDrawer file={openFile} onClose={() => setOpenFile(null)} />}
+
+      {previewFile && <PreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
 
       {errorMessage && (
         <Modal title="Не получилось" onClose={() => setErrorMessage('')}>

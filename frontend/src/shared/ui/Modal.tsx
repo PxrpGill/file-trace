@@ -1,14 +1,20 @@
 import { useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 
-export function Modal({ title, onClose, children }: {
+export function Modal({ title, onClose, children, className }: {
   title: string
   onClose: () => void
   children: ReactNode
+  className?: string
 }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={className ? `modal ${className}` : 'modal'}
+        role="dialog"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2>{title}</h2>
         {children}
       </div>
