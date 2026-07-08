@@ -46,6 +46,10 @@ export function BrowserPage() {
     }),
   )
 
+  const uploadingCount = useMutationState({
+    filters: { mutationKey: ['upload-file'], status: 'pending' },
+  }).length
+
   useEffect(() => {
     const folderParam = searchParams.get('folder')
     if (!folderParam || !tree.data) return
@@ -138,6 +142,13 @@ export function BrowserPage() {
                 </>
               )}
             </div>
+
+            {uploadingCount > 0 && (
+              <div className="upload-banner">
+                <span className="spinner" aria-hidden="true" />
+                <span>Загружается файлов: {uploadingCount}…</span>
+              </div>
+            )}
 
             {(files.data ?? []).length === 0 ? (
               <div className="empty">
