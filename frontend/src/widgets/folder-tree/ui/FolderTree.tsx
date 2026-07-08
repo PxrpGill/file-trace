@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FolderNode } from '@/entities/folder'
 
 interface Props {
@@ -13,6 +13,15 @@ interface TreeNodeProps {
   onSelect: (node: FolderNode) => void
   expanded: Set<number>
   onToggle: (id: number) => void
+}
+
+function findAncestorIds(nodes: FolderNode[], targetId: number): number[] | null {
+  for (const node of nodes) {
+    if (node.id === targetId) return []
+    const childPath = findAncestorIds(node.children, targetId)
+    if (childPath !== null) return [node.id, ...childPath]
+  }
+  return null
 }
 
 function TreeNode({ node, selectedId, onSelect, expanded, onToggle }: TreeNodeProps) {
@@ -60,6 +69,23 @@ function TreeNode({ node, selectedId, onSelect, expanded, onToggle }: TreeNodePr
 
 export function FolderTree({ nodes, selectedId, onSelect }: Props) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
+
+  useEffect(() => {
+    if (selectedId === null) return
+    const ancestorIds = findAncestorIds(nodes, selectedId)
+    if (!ancestorIds || ancestorIds.length === 0) return
+    setExpanded((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const id of ancestorIds) {
+        if (!next.has(id)) {
+          next.add(id)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [selectedId, nodes])
 
   const toggle = (id: number) => {
     setExpanded((prev) => {
