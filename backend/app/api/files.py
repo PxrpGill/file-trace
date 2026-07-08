@@ -1,4 +1,5 @@
 import io
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -58,6 +59,7 @@ from app.services.preview import (
 )
 from app.services.storage import FileStorage
 from app.services.tree_upload import (
+    attach_file_version,
     get_or_create_child_folder,
     resolve_folder_path,
     sanitize_relative_path,
@@ -65,6 +67,12 @@ from app.services.tree_upload import (
 )
 
 router = APIRouter(prefix="/api", tags=["files"])
+
+# storage.save() is I/O-bound (disk write + sha256) and releases the GIL, so
+# hashing several files of a tree upload in parallel threads is a real win
+# even with a single backend process; the DB/audit work stays sequential on
+# the request's single session/transaction below.
+TREE_UPLOAD_IO_WORKERS = 4
 
 MIN_SEARCH_QUERY_LENGTH = 2
 
@@ -221,16 +229,21 @@ def upload_tree(
 ) -> UploadTreeResult:
     require_folder_access(db, user, folder_id, PermissionLevel.write)
     ip = client_ip(request)
-    created = 0
+
+    entries = []
     for upload in files:
         segments = sanitize_relative_path(upload.filename or "")
-        if not segments:
-            continue
+        if segments:
+            entries.append((upload, segments))
+
+    with ThreadPoolExecutor(max_workers=TREE_UPLOAD_IO_WORKERS) as pool:
+        blobs = list(pool.map(lambda entry: storage.save(entry[0].file), entries))
+
+    created = 0
+    for (upload, segments), blob in zip(entries, blobs):
         *dirs, name = segments
         target_folder_id = resolve_folder_path(db, folder_id, dirs, user.id, ip)
-        save_file_content(
-            db, storage, target_folder_id, name, upload.file, upload.content_type, user, ip
-        )
+        attach_file_version(db, target_folder_id, name, blob, upload.content_type, user, ip)
         created += 1
     db.commit()
     return UploadTreeResult(files=created)

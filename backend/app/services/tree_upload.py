@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models import AuditAction, File, FileVersion, Folder, User
 from app.services import audit
-from app.services.storage import FileStorage
+from app.services.storage import FileStorage, StoredBlob
 
 
 def sanitize_relative_path(path: str) -> list[str]:
@@ -56,18 +56,21 @@ def resolve_folder_path(
     return folder_id
 
 
-def save_file_content(
+def attach_file_version(
     db: Session,
-    storage: FileStorage,
     folder_id: int,
     name: str,
-    stream: BinaryIO,
+    blob: StoredBlob,
     content_type: str | None,
     user: User,
     ip: str | None,
 ) -> File:
-    """Save `stream` as `name` in `folder_id`: a new File if the name is
-    free, otherwise a new FileVersion of the existing one."""
+    """Attach an already-stored `blob` as `name` in `folder_id`: a new File
+    if the name is free, otherwise a new FileVersion of the existing one.
+
+    Split out from `save_file_content` so callers that need to save many
+    blobs (e.g. concurrently, ahead of the DB work) can do the storage I/O
+    separately from the sequential DB/audit bookkeeping."""
     file = (
         db.query(File)
         .filter_by(folder_id=folder_id, name=name, is_deleted=False)
@@ -79,7 +82,6 @@ def save_file_content(
         db.add(file)
         db.flush()
 
-    blob = storage.save(stream)
     version = FileVersion(
         file=file,
         version_no=len(file.versions) + 1,
@@ -115,3 +117,19 @@ def save_file_content(
             details={"name": name, "version_no": version.version_no, "size": version.size},
         )
     return file
+
+
+def save_file_content(
+    db: Session,
+    storage: FileStorage,
+    folder_id: int,
+    name: str,
+    stream: BinaryIO,
+    content_type: str | None,
+    user: User,
+    ip: str | None,
+) -> File:
+    """Save `stream` as `name` in `folder_id`: a new File if the name is
+    free, otherwise a new FileVersion of the existing one."""
+    blob = storage.save(stream)
+    return attach_file_version(db, folder_id, name, blob, content_type, user, ip)
