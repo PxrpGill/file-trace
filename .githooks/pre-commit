@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Lints staged backend/*.py files with ruff before allowing the commit.
+# Installed via `make setup` (git config core.hooksPath .githooks).
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+staged_py=()
+while IFS= read -r f; do
+  [ -n "$f" ] && staged_py+=("$f")
+done < <(git diff --cached --name-only --diff-filter=ACM -- 'backend/*.py')
+
+if [ ${#staged_py[@]} -eq 0 ]; then
+  exit 0
+fi
+
+relative=()
+for f in "${staged_py[@]}"; do
+  relative+=("${f#backend/}")
+done
+
+if ! (cd backend && uv run ruff check "${relative[@]}"); then
+  echo "ruff check не прошёл — почини (или запусти: cd backend && uv run ruff check --fix)." >&2
+  exit 1
+fi

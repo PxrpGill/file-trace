@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import ActiveUser, AdminUser, AdminUserOrTicket, DbDep
 from app.models import AuditAction, AuditLog, PermissionLevel, User
 from app.schemas.audit import AuditEntryOut, AuditPage
-from app.services.permissions import require_folder_access
 
 router = APIRouter(prefix="/api", tags=["audit"])
 

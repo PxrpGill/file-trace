@@ -3,20 +3,24 @@
 BACKEND := cd backend &&
 FRONTEND := cd frontend &&
 
-.PHONY: help setup db test migrate admin dev dev-backend dev-frontend build up down logs ps clean
+.PHONY: help setup db test lint migrate admin dev dev-backend dev-frontend build up down logs ps clean
 
 help: ## показать список команд
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2}'
 
-setup: ## установить зависимости backend и frontend
+setup: ## установить зависимости backend и frontend, подключить git-хуки
 	$(BACKEND) uv sync
 	$(FRONTEND) npm install
+	git config core.hooksPath .githooks
 
 db: ## поднять PostgreSQL 17 для разработки (localhost:5433)
 	docker compose up -d --wait db
 
 test: ## запустить тесты backend
 	$(BACKEND) uv run pytest
+
+lint: ## проверить backend линтером ruff
+	$(BACKEND) uv run ruff check .
 
 migrate: db ## применить миграции БД
 	$(BACKEND) uv run alembic upgrade head

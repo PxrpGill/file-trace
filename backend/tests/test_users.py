@@ -1,4 +1,4 @@
-from app.models import AuditAction, AuditLog, User
+from app.models import AuditAction, AuditLog
 
 from tests.test_auth import auth_header, login
 

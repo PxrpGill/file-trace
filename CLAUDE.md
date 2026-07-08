@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 File-Trace — внутреннее корпоративное хранилище файлов, главная фича — аудит «электронных следов»: каждое действие (вход, загрузка, скачивание, новая версия, переименование, удаление, выдача прав…) пишется в append-only журнал `audit_log`. Язык общения с пользователем и все UI-тексты — русский.
 
+Конкретные, подсмотренные в коде шаблоны (анатомия эндпоинта с аудитом, тестов, FSD-фичи, git-цикла фичи) — в `.claude/patterns.md`, читать перед тем, как писать новый эндпоинт или новую feature. Для типовых задач есть готовые скиллы: `.claude/skills/new-endpoint` (новый мутирующий эндпоинт backend) и `.claude/skills/new-feature` (новая feature-папка FSD).
+
 ## Команды
 
 ```bash
@@ -24,7 +26,7 @@ cd backend && uv run pytest tests/test_files.py -q
 cd backend && uv run pytest tests/test_files.py::test_soft_delete_restore_flow
 ```
 
-Проверка типов и сборка фронтенда: `make build` (= `tsc -b && vite build`). Линтера в backend нет.
+Проверка типов и сборка фронтенда: `make build` (= `tsc -b && vite build`). Backend линтуется `ruff` (`make lint`, дефолтный набор правил E4/E7/E9/F — без line-length и pyupgrade, чтобы не шуметь на существующем коде); `make setup` подключает git-хук `.githooks/pre-commit`, блокирующий коммит с ошибками ruff в изменённых `backend/*.py`.
 
 После изменения моделей: `cd backend && FILETRACE_DATABASE_URL="sqlite:///$(mktemp -d)/mig.db" uv run alembic revision --autogenerate -m "..."` — затем проверить сгенерированный файл (автогенерация может вставить `Text()` без импорта) и прогнать `upgrade head`.
 
@@ -55,7 +57,7 @@ cd backend && uv run pytest tests/test_files.py::test_soft_delete_restore_flow
 
 ### Frontend
 
-Токен в localStorage, axios-интерсепторы в `src/api/client.ts` (401 → редирект на /login); скачивание защищённых URL — только через `downloadBlob()` (сохраняет Authorization). Метки времени бэкенд может отдавать без зоны (sqlite) — всё форматирование дат через `formatDate()` в `src/api/types.ts`, который дописывает `Z`. Подписи действий аудита — словарь `ACTION_LABELS` там же: новое действие enum'а требует добавления перевода. Дизайн-токены — в `src/styles.css` (:root): чернильный `--ink`, сургучный акцент `--wax`, mono-шрифт для «следов» (время/хэши/размеры).
+FSD-структура (`app/pages/widgets/features/entities/shared`); импорты между слоями — только через паблик `index.ts` слоя. Токен в localStorage, axios-интерсепторы в `shared/api/client.ts` (401 → редирект на /login); скачивание защищённых URL — только через `triggerDownload()` в `shared/api/download.ts` (обменивает токен на одноразовый download-ticket, живущий 60с, и кладёт его в query — обычная ссылка не может нести заголовок Authorization). Метки времени бэкенд может отдавать без зоны (sqlite) — всё форматирование дат через `formatDate()` в `shared/lib/format-date.ts`, который дописывает `Z`. Подписи действий аудита — словарь `ACTION_LABELS` в `entities/audit/model/action-labels.ts`: новое действие enum'а требует добавления перевода. Дизайн-токены — в `app/styles/styles.css` (:root): чернильный `--ink`, сургучный акцент `--wax`, mono-шрифт для «следов» (время/хэши/размеры).
 
 ### Конфигурация
 

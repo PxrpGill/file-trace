@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run pytest)",
+      "Bash(uv run pytest *)",
+      "Bash(uv run alembic *)",
+      "Bash(uv run uvicorn *)",
+      "Bash(npm run build)",
+      "Bash(npm run dev)",
+      "Bash(npm install)",
+      "Bash(make test)",
+      "Bash(make build)",
+      "Bash(make dev)",
+      "Bash(make db)",
+      "Bash(make migrate)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log)",
+      "Bash(git log *)",
+      "Bash(git show)",
+      "Bash(git show *)",
+      "Bash(make lint)",
+      "Bash(npm run lint)",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "mcp__claude-in-chrome__read_network_requests",
+      "mcp__claude-in-chrome__find",
+      "mcp__claude-in-chrome__read_console_messages"
+    ]
+  }
+}

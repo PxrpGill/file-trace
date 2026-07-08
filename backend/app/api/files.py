@@ -62,7 +62,6 @@ from app.services.preview import (
     PreviewRangeNotSatisfiableError,
     PreviewSourceTooLargeError,
     PreviewToolUnavailableError,
-    PreviewUnsupportedError,
     convert_office_to_pdf,
     get_preview_kind,
     get_preview_mime,
