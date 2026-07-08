@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: filetrace
       POSTGRES_USER: filetrace
@@ -17,6 +18,7 @@ services:
 
   backend:
     build: ./backend
+    restart: unless-stopped
     environment:
       FILETRACE_DATABASE_URL: postgresql+psycopg://filetrace:${POSTGRES_PASSWORD:-filetrace}@db:5432/filetrace
       # обязательно переопределите в .env для прода
@@ -29,6 +31,7 @@ services:
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
     ports:
       - "${HTTP_PORT:-8080}:80"
     depends_on:
