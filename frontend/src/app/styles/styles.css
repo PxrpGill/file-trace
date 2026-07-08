@@ -261,6 +261,11 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
   color: var(--steel);
 }
 .tree-row.selected .lvl { color: #c8d2e0; }
+.tree-row .arrow {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.tree-row .arrow.expanded { transform: rotate(90deg); }
 .tree-children { margin-left: 14px; border-left: 1px solid var(--line); padding-left: 4px; }
 
 .content { grid-area: 1 / 2; padding: 20px 24px; overflow-y: auto; min-width: 0; }
