@@ -263,7 +263,7 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
 .tree-row.selected .lvl { color: #c8d2e0; }
 .tree-children { margin-left: 14px; border-left: 1px solid var(--line); padding-left: 4px; }
 
-.content { padding: 20px 24px; overflow-y: auto; min-width: 0; }
+.content { grid-area: 1 / 2; padding: 20px 24px; overflow-y: auto; min-width: 0; }
 .content-head {
   display: flex;
   align-items: center;
