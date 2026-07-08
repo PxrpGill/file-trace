@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Enum, String, func
+from sqlalchemy import JSON, DateTime, Enum, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,6 +36,12 @@ class AuditLog(Base):
     """Append-only: no update or delete path exists anywhere in the API."""
 
     __tablename__ = "audit_log"
+    __table_args__ = (
+        # file_history() filters by file_id and sorts by created_at — a
+        # composite index lets Postgres satisfy both in one index scan
+        # instead of a bitmap-AND of the separate single-column indexes.
+        Index("ix_audit_log_file_created", "file_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(index=True)

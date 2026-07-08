@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -8,6 +8,20 @@ from app.database import Base
 
 class File(Base):
     __tablename__ = "files"
+    __table_args__ = (
+        # Один индекс закрывает два случая: уникальность имени среди
+        # неудалённых файлов папки (раньше — только check-then-insert в
+        # Python, с гонкой при параллельном аплоаде) и быстрый lookup/сортировку
+        # для list_files (folder_id + is_deleted=false, order by name).
+        Index(
+            "uq_files_folder_name_active",
+            "folder_id",
+            "name",
+            unique=True,
+            sqlite_where=text("is_deleted = 0"),
+            postgresql_where=text("is_deleted = false"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     folder_id: Mapped[int] = mapped_column(ForeignKey("folders.id"), index=True)

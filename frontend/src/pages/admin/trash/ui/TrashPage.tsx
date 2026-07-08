@@ -5,8 +5,9 @@ import { PurgeFileAction } from '@/features/file/purge-file'
 
 export function TrashPage() {
   const trash = useTrashQuery()
+  const files = trash.data?.pages.flatMap((page) => page.items) ?? []
 
-  if ((trash.data ?? []).length === 0) {
+  if (files.length === 0) {
     return <div className="empty">Корзина пуста</div>
   }
 
@@ -21,7 +22,7 @@ export function TrashPage() {
           </tr>
         </thead>
         <tbody>
-          {(trash.data ?? []).map((file) => (
+          {files.map((file) => (
             <tr key={file.id}>
               <td>{file.name}</td>
               <td className="mono">
@@ -34,6 +35,15 @@ export function TrashPage() {
           ))}
         </tbody>
       </table>
+      {trash.hasNextPage && (
+        <button
+          className="btn secondary small"
+          onClick={() => trash.fetchNextPage()}
+          disabled={trash.isFetchingNextPage}
+        >
+          {trash.isFetchingNextPage ? 'Загрузка…' : 'Показать ещё'}
+        </button>
+      )}
     </div>
   )
 }

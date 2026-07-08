@@ -7,9 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from starlette.background import BackgroundTask
 
 from app.api.deps import (
@@ -109,14 +109,27 @@ def _resolve_bulk_files(
     levels: dict[int, PermissionLevel],
     level: PermissionLevel,
 ) -> tuple[list[File], list[BulkFailure]]:
-    ok: list[File] = []
-    failed: list[BulkFailure] = []
+    unique_ids: list[int] = []
     seen: set[int] = set()
     for file_id in file_ids:
-        if file_id in seen:
-            continue
-        seen.add(file_id)
-        file = db.get(File, file_id)
+        if file_id not in seen:
+            seen.add(file_id)
+            unique_ids.append(file_id)
+
+    found = {
+        file.id: file
+        for file in (
+            db.query(File)
+            .options(selectinload(File.versions))
+            .filter(File.id.in_(unique_ids))
+            .all()
+        )
+    }
+
+    ok: list[File] = []
+    failed: list[BulkFailure] = []
+    for file_id in unique_ids:
+        file = found.get(file_id)
         if file is None or file.is_deleted:
             failed.append(BulkFailure(file_id=file_id, reason="not_found"))
         elif not permits(levels.get(file.folder_id), level):
@@ -156,15 +169,27 @@ def _save_version(
     return version
 
 
+DEFAULT_LIST_LIMIT = 200
+MAX_LIST_LIMIT = 1000
+
+
 @router.get("/folders/{folder_id}/files", response_model=list[FileOut])
-def list_files(folder_id: int, db: DbDep, user: ActiveUser) -> list[File]:
+def list_files(
+    folder_id: int,
+    db: DbDep,
+    user: ActiveUser,
+    response: Response,
+    limit: int = Query(default=DEFAULT_LIST_LIMIT, le=MAX_LIST_LIMIT),
+    offset: int = Query(default=0, ge=0),
+) -> list[File]:
     require_folder_access(db, user, folder_id, PermissionLevel.read)
-    return (
+    query = (
         db.query(File)
+        .options(selectinload(File.versions))
         .filter_by(folder_id=folder_id, is_deleted=False)
-        .order_by(File.name)
-        .all()
     )
+    response.headers["X-Total-Count"] = str(query.count())
+    return query.order_by(File.name).limit(limit).offset(offset).all()
 
 
 @router.get("/files/search", response_model=list[FileSearchResult])
@@ -187,6 +212,7 @@ def search_files(
     # since it discloses nothing beyond what browsing folders already reveals.
     rows = (
         db.query(File, Folder.name)
+        .options(selectinload(File.versions))
         .join(Folder, File.folder_id == Folder.id)
         .filter(File.folder_id.in_(folder_ids))
         .filter(File.is_deleted.is_(False))
@@ -287,8 +313,16 @@ def upload_tree(
 
 
 @router.get("/files/trash", response_model=list[FileOut])
-def list_trash(db: DbDep, _: AdminUser) -> list[File]:
-    return db.query(File).filter_by(is_deleted=True).order_by(File.deleted_at).all()
+def list_trash(
+    db: DbDep,
+    _: AdminUser,
+    response: Response,
+    limit: int = Query(default=DEFAULT_LIST_LIMIT, le=MAX_LIST_LIMIT),
+    offset: int = Query(default=0, ge=0),
+) -> list[File]:
+    query = db.query(File).options(selectinload(File.versions)).filter_by(is_deleted=True)
+    response.headers["X-Total-Count"] = str(query.count())
+    return query.order_by(File.deleted_at).limit(limit).offset(offset).all()
 
 
 @router.get("/files/{file_id}/download")
@@ -353,6 +387,12 @@ def bulk_download_zip(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No accessible files")
 
     ip = client_ip(request)
+    folders_by_id = {
+        folder.id: folder
+        for folder in db.query(Folder).filter(
+            Folder.id.in_({file.folder_id for file in files})
+        )
+    }
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
     used_names: dict[str, int] = {}
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -360,7 +400,7 @@ def bulk_download_zip(
             version = file.current_version
             if version is None:
                 continue
-            folder = db.get(Folder, file.folder_id)
+            folder = folders_by_id[file.folder_id]
             base_arcname = f"{folder.name}/{file.name}"
             count = used_names.get(base_arcname, 0)
             used_names[base_arcname] = count + 1

@@ -1,13 +1,39 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { api } from '@/shared/api'
 import type { AuditEntry } from '@/entities/audit'
 import type { FileItem, FileSearchResult, FileVersion } from '../model/types'
 
+const PAGE_SIZE = 200
+
+interface Page<T> {
+  items: T[]
+  offset: number
+  total: number
+}
+
+function totalFrom(headers: Record<string, unknown>, fallback: number): number {
+  const raw = headers['x-total-count']
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function nextOffset<T>(lastPage: Page<T>): number | undefined {
+  const loaded = lastPage.offset + lastPage.items.length
+  return loaded < lastPage.total ? loaded : undefined
+}
+
 export function useFilesQuery(folderId: number | null) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['files', folderId],
     enabled: folderId !== null,
-    queryFn: async () => (await api.get<FileItem[]>(`/api/folders/${folderId}/files`)).data,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<Page<FileItem>> => {
+      const res = await api.get<FileItem[]>(`/api/folders/${folderId}/files`, {
+        params: { limit: PAGE_SIZE, offset: pageParam },
+      })
+      return { items: res.data, offset: pageParam, total: totalFrom(res.headers, res.data.length) }
+    },
+    getNextPageParam: nextOffset,
   })
 }
 
@@ -22,9 +48,16 @@ export function useFileSearchQuery(query: string) {
 }
 
 export function useTrashQuery() {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['trash'],
-    queryFn: async () => (await api.get<FileItem[]>('/api/files/trash')).data,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<Page<FileItem>> => {
+      const res = await api.get<FileItem[]>('/api/files/trash', {
+        params: { limit: PAGE_SIZE, offset: pageParam },
+      })
+      return { items: res.data, offset: pageParam, total: totalFrom(res.headers, res.data.length) }
+    },
+    getNextPageParam: nextOffset,
   })
 }
 
@@ -36,8 +69,15 @@ export function useFileVersionsQuery(fileId: number) {
 }
 
 export function useFileAuditQuery(fileId: number) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['file-audit', fileId],
-    queryFn: async () => (await api.get<AuditEntry[]>(`/api/files/${fileId}/audit`)).data,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<Page<AuditEntry>> => {
+      const res = await api.get<AuditEntry[]>(`/api/files/${fileId}/audit`, {
+        params: { limit: PAGE_SIZE, offset: pageParam },
+      })
+      return { items: res.data, offset: pageParam, total: totalFrom(res.headers, res.data.length) }
+    },
+    getNextPageParam: nextOffset,
   })
 }

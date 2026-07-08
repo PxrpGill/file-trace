@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useSession } from '@/entities/session'
 import type { FolderNode } from '@/entities/folder'
@@ -9,6 +9,7 @@ import { useMutationState } from '@tanstack/react-query'
 import { formatDate, formatSize } from '@/shared/lib'
 import { Modal, ProgressBar } from '@/shared/ui'
 import { FileTable, SelectionToolbar } from '@/widgets/file-table'
+import type { FileTableColumn } from '@/widgets/file-table'
 import { FolderTree } from '@/widgets/folder-tree'
 import { FileDrawer } from '@/widgets/file-drawer'
 import { CreateFolderAction } from '@/features/folder/create'
@@ -41,6 +42,7 @@ export function BrowserPage() {
 
   const tree = useFolderTreeQuery()
   const files = useFilesQuery(selected?.id ?? null)
+  const fileRows = useMemo(() => files.data?.pages.flatMap((page) => page.items) ?? [], [files.data])
   const uploadFile = useUploadFileMutation(selected?.id ?? null)
 
   const startUpload = async (file: globalThis.File) => {
@@ -58,18 +60,19 @@ export function BrowserPage() {
       setUploads((u) => u.filter((x) => x.id !== id))
     }
   }
-  const uploadingVersionIds = new Set(
-    useMutationState({
-      filters: { mutationKey: ['create-version'], status: 'pending' },
-      select: (mutation) => mutation.options.mutationKey?.[1] as number,
-    }),
-  )
-  const extractingIds = new Set(
-    useMutationState({
-      filters: { mutationKey: ['extract'], status: 'pending' },
-      select: (mutation) => mutation.options.mutationKey?.[1] as number,
-    }),
-  )
+  const uploadingVersionIdsList = useMutationState({
+    filters: { mutationKey: ['create-version'], status: 'pending' },
+    select: (mutation) => mutation.options.mutationKey?.[1] as number,
+  })
+  const extractingIdsList = useMutationState({
+    filters: { mutationKey: ['extract'], status: 'pending' },
+    select: (mutation) => mutation.options.mutationKey?.[1] as number,
+  })
+  // useMutationState возвращает стабильную ссылку, пока реально ничего не
+  // изменилось — оборачиваем в useMemo, иначе `new Set(...)` пересоздавался
+  // бы на каждый рендер и обесценивал memo у строк FileTable.
+  const uploadingVersionIds = useMemo(() => new Set(uploadingVersionIdsList), [uploadingVersionIdsList])
+  const extractingIds = useMemo(() => new Set(extractingIdsList), [extractingIdsList])
 
   useEffect(() => {
     setSelectedIds(new Set())
@@ -87,17 +90,112 @@ export function BrowserPage() {
 
   useEffect(() => {
     const fileParam = searchParams.get('file')
-    if (!fileParam || !files.data) return
+    if (!fileParam || fileRows.length === 0) return
     const fileId = Number(fileParam)
-    const match = files.data.find((f) => f.id === fileId)
+    const match = fileRows.find((f) => f.id === fileId)
     if (match) {
       setOpenFile(match)
       setSearchParams({}, { replace: true })
     }
-  }, [searchParams, files.data])
+  }, [searchParams, fileRows])
 
   const canWrite = selected?.level === 'write'
   const isAdmin = user?.role === 'admin'
+
+  const onToggleFile = useCallback((id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const onToggleAllFiles = useCallback(
+    (checked: boolean) => {
+      setSelectedIds(checked ? new Set(fileRows.map((f) => f.id)) : new Set())
+    },
+    [fileRows],
+  )
+
+  const fileColumns = useMemo<FileTableColumn<FileItem>[]>(
+    () => [
+      {
+        header: 'Размер',
+        className: 'mono',
+        render: (file) => (file.current_version ? formatSize(file.current_version.size) : '—'),
+      },
+      {
+        header: 'Версия',
+        className: 'mono',
+        render: (file) => `v${file.current_version?.version_no ?? 0}`,
+      },
+      {
+        header: 'Обновлён',
+        className: 'mono',
+        render: (file) =>
+          file.current_version ? formatDate(file.current_version.created_at) : '—',
+      },
+    ],
+    [],
+  )
+
+  const renderName = useCallback(
+    (file: FileItem) => (
+      <span
+        className="file-name"
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpenFile(file)}
+        onKeyDown={(e) => e.key === 'Enter' && setOpenFile(file)}
+      >
+        {file.name}
+      </span>
+    ),
+    [],
+  )
+
+  const renderActions = useCallback(
+    (file: FileItem) => {
+      const versionUploading = uploadingVersionIds.has(file.id)
+      const extracting = extractingIds.has(file.id)
+      const rowBusy = versionUploading || extracting
+      return (
+        <>
+          {getPreviewKind(file.name) !== null && (
+            <>
+              <button
+                className="btn secondary small"
+                disabled={rowBusy}
+                onClick={() => setPreviewFile(file)}
+              >
+                Просмотр
+              </button>{' '}
+            </>
+          )}
+          <DownloadFileButton url={`/api/files/${file.id}/download`} disabled={rowBusy} />{' '}
+          {canWrite && (
+            <>
+              <UploadVersionButton file={file} disabled={rowBusy} onError={setErrorMessage} />{' '}
+              {isArchiveFile(file.name) && (
+                <>
+                  <ExtractArchiveAction file={file} disabled={rowBusy} onError={setErrorMessage} />{' '}
+                </>
+              )}
+              <RenameFileAction file={file} disabled={rowBusy} />{' '}
+              <MoveFileAction file={file} disabled={rowBusy} onError={setErrorMessage} />{' '}
+              <DeleteFileAction
+                file={file}
+                disabled={rowBusy}
+                onDeleted={() => setOpenFile(null)}
+              />
+            </>
+          )}
+        </>
+      )
+    },
+    [uploadingVersionIds, extractingIds, canWrite],
+  )
 
   return (
     <div className="browser">
@@ -241,106 +339,22 @@ export function BrowserPage() {
             )}
 
             <FileTable
-              rows={files.data ?? []}
+              rows={fileRows}
               emptyMessage={
                 'В папке пока нет файлов' +
                 (canWrite ? ' — перетащите файл сюда или нажмите «Загрузить файл»' : '')
               }
               selectedIds={selectedIds}
-              onToggle={(id) =>
-                setSelectedIds((prev) => {
-                  const next = new Set(prev)
-                  if (next.has(id)) next.delete(id)
-                  else next.add(id)
-                  return next
-                })
+              onToggle={onToggleFile}
+              onToggleAll={onToggleAllFiles}
+              columns={fileColumns}
+              renderName={renderName}
+              renderActions={renderActions}
+              onEndReached={
+                files.hasNextPage && !files.isFetchingNextPage
+                  ? () => files.fetchNextPage()
+                  : undefined
               }
-              onToggleAll={(checked) =>
-                setSelectedIds(checked ? new Set((files.data ?? []).map((f) => f.id)) : new Set())
-              }
-              columns={[
-                {
-                  header: 'Размер',
-                  className: 'mono',
-                  render: (file) =>
-                    file.current_version ? formatSize(file.current_version.size) : '—',
-                },
-                {
-                  header: 'Версия',
-                  className: 'mono',
-                  render: (file) => `v${file.current_version?.version_no ?? 0}`,
-                },
-                {
-                  header: 'Обновлён',
-                  className: 'mono',
-                  render: (file) =>
-                    file.current_version ? formatDate(file.current_version.created_at) : '—',
-                },
-              ]}
-              renderName={(file) => (
-                <span
-                  className="file-name"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setOpenFile(file)}
-                  onKeyDown={(e) => e.key === 'Enter' && setOpenFile(file)}
-                >
-                  {file.name}
-                </span>
-              )}
-              renderActions={(file) => {
-                const versionUploading = uploadingVersionIds.has(file.id)
-                const extracting = extractingIds.has(file.id)
-                const rowBusy = versionUploading || extracting
-                return (
-                  <>
-                    {getPreviewKind(file.name) !== null && (
-                      <>
-                        <button
-                          className="btn secondary small"
-                          disabled={rowBusy}
-                          onClick={() => setPreviewFile(file)}
-                        >
-                          Просмотр
-                        </button>{' '}
-                      </>
-                    )}
-                    <DownloadFileButton
-                      url={`/api/files/${file.id}/download`}
-                      disabled={rowBusy}
-                    />{' '}
-                    {canWrite && (
-                      <>
-                        <UploadVersionButton
-                          file={file}
-                          disabled={rowBusy}
-                          onError={setErrorMessage}
-                        />{' '}
-                        {isArchiveFile(file.name) && (
-                          <>
-                            <ExtractArchiveAction
-                              file={file}
-                              disabled={rowBusy}
-                              onError={setErrorMessage}
-                            />{' '}
-                          </>
-                        )}
-                        <RenameFileAction file={file} disabled={rowBusy} />{' '}
-                        <MoveFileAction
-                          file={file}
-                          disabled={rowBusy}
-                          onError={setErrorMessage}
-                        />{' '}
-                        <DeleteFileAction
-                          file={file}
-                          disabled={rowBusy}
-                          onDeleted={() => setOpenFile(null)}
-                        />
-                      </>
-                    )}
-                  </>
-                )
-              }}
             />
           </>
         )}

@@ -373,6 +373,15 @@ th.select-col, td.select-col { width: 1%; padding-right: 0; }
 /* ---------- tables ---------- */
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
+.file-table-viewport {
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+}
+.file-table-viewport thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
 table { border-collapse: collapse; width: 100%; }
 th {
   text-align: left;

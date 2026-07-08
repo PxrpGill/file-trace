@@ -3,10 +3,15 @@
 A permission granted on a folder applies to its whole subtree; when several
 ancestors carry explicit permissions for the user, the nearest one wins.
 Admins implicitly have write everywhere.
+
+Both lookups below run as a single `WITH RECURSIVE` query instead of walking
+the folder tree with one SQL round-trip per level — important since
+`require_folder_access` runs on almost every request.
 """
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy import func, literal, select
+from sqlalchemy.orm import Session, aliased
 
 from app.models import Folder, FolderPermission, PermissionLevel, User, UserRole
 
@@ -14,17 +19,29 @@ from app.models import Folder, FolderPermission, PermissionLevel, User, UserRole
 def effective_level(db: Session, user: User, folder: Folder) -> PermissionLevel | None:
     if user.role == UserRole.admin:
         return PermissionLevel.write
-    current: Folder | None = folder
-    while current is not None:
-        permission = (
-            db.query(FolderPermission)
-            .filter_by(folder_id=current.id, user_id=user.id)
-            .first()
-        )
-        if permission is not None:
-            return permission.level
-        current = db.get(Folder, current.parent_id) if current.parent_id else None
-    return None
+
+    ancestors = (
+        select(Folder.id.label("id"), Folder.parent_id.label("parent_id"), literal(0).label("depth"))
+        .where(Folder.id == folder.id)
+        .cte("ancestors", recursive=True)
+    )
+    parent = aliased(Folder)
+    ancestors = ancestors.union_all(
+        select(
+            parent.id.label("id"),
+            parent.parent_id.label("parent_id"),
+            (ancestors.c.depth + 1).label("depth"),
+        ).join(ancestors, parent.id == ancestors.c.parent_id)
+    )
+
+    row = db.execute(
+        select(FolderPermission.level)
+        .join(ancestors, FolderPermission.folder_id == ancestors.c.id)
+        .where(FolderPermission.user_id == user.id)
+        .order_by(ancestors.c.depth.asc())
+        .limit(1)
+    ).first()
+    return row[0] if row is not None else None
 
 
 def permits(actual: PermissionLevel | None, level: PermissionLevel) -> bool:
@@ -44,27 +61,37 @@ def require_folder_access(
 
 def accessible_levels(db: Session, user: User) -> dict[int, PermissionLevel]:
     """Effective permission level for every folder the user can see."""
-    folders = db.query(Folder).all()
     if user.role == UserRole.admin:
-        return {f.id: PermissionLevel.write for f in folders}
+        ids = db.execute(select(Folder.id)).scalars().all()
+        return {folder_id: PermissionLevel.write for folder_id in ids}
 
-    explicit = {
-        p.folder_id: p.level
-        for p in db.query(FolderPermission).filter_by(user_id=user.id)
-    }
-    by_id = {f.id: f for f in folders}
-    result: dict[int, PermissionLevel] = {}
+    root_permission = aliased(FolderPermission)
+    base = (
+        select(Folder.id.label("folder_id"), root_permission.level.label("level"))
+        .select_from(Folder)
+        .outerjoin(
+            root_permission,
+            (root_permission.folder_id == Folder.id) & (root_permission.user_id == user.id),
+        )
+        .where(Folder.parent_id.is_(None))
+    )
+    levels = base.cte("folder_levels", recursive=True)
 
-    def resolve(folder: Folder) -> PermissionLevel | None:
-        if folder.id in result:
-            return result[folder.id]
-        level = explicit.get(folder.id)
-        if level is None and folder.parent_id is not None:
-            level = resolve(by_id[folder.parent_id])
-        if level is not None:
-            result[folder.id] = level
-        return level
+    child = aliased(Folder)
+    child_permission = aliased(FolderPermission)
+    recursive = (
+        select(
+            child.id.label("folder_id"),
+            func.coalesce(child_permission.level, levels.c.level).label("level"),
+        )
+        .select_from(child)
+        .join(levels, child.parent_id == levels.c.folder_id)
+        .outerjoin(
+            child_permission,
+            (child_permission.folder_id == child.id) & (child_permission.user_id == user.id),
+        )
+    )
+    levels = levels.union_all(recursive)
 
-    for folder in folders:
-        resolve(folder)
-    return result
+    rows = db.execute(select(levels.c.folder_id, levels.c.level)).all()
+    return {folder_id: level for folder_id, level in rows if level is not None}

@@ -21,6 +21,7 @@ function detailLine(entry: AuditEntry): string | null {
 export function FileDrawer({ file, onClose }: { file: FileItem; onClose: () => void }) {
   const versions = useFileVersionsQuery(file.id)
   const history = useFileAuditQuery(file.id)
+  const historyEntries = history.data?.pages.flatMap((page) => page.items) ?? []
 
   return (
     <>
@@ -49,7 +50,7 @@ export function FileDrawer({ file, onClose }: { file: FileItem; onClose: () => v
 
           <h3>История действий</h3>
           <ul className="trace">
-            {(history.data ?? []).map((entry) => (
+            {historyEntries.map((entry) => (
               <li key={entry.id} className={WAX_ACTIONS.has(entry.action) ? 'wax' : ''}>
                 <span className="stamp">{ACTION_LABELS[entry.action]}</span>
                 <span className="when">{formatDate(entry.created_at)}</span>
@@ -63,6 +64,15 @@ export function FileDrawer({ file, onClose }: { file: FileItem; onClose: () => v
               </li>
             ))}
           </ul>
+          {history.hasNextPage && (
+            <button
+              className="btn secondary small"
+              onClick={() => history.fetchNextPage()}
+              disabled={history.isFetchingNextPage}
+            >
+              {history.isFetchingNextPage ? 'Загрузка…' : 'Показать ещё'}
+            </button>
+          )}
         </div>
       </aside>
     </>

@@ -4,11 +4,11 @@ import json
 from collections.abc import Iterator
 from datetime import datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import ActiveUser, AdminUser, AdminUserOrTicket, DbDep
+from app.api.deps import ActiveUser, AdminUser, AdminUserOrTicket, DbDep, get_db
 from app.models import AuditAction, AuditLog, PermissionLevel, User
 from app.schemas.audit import AuditEntryOut, AuditPage
 
@@ -74,17 +74,26 @@ def _filtered(
 
 
 @router.get("/files/{file_id}/audit", response_model=list[AuditEntryOut])
-def file_history(file_id: int, db: DbDep, user: ActiveUser) -> list[AuditEntryOut]:
+def file_history(
+    file_id: int,
+    db: DbDep,
+    user: ActiveUser,
+    response: Response,
+    limit: int = Query(default=200, le=1000),
+    offset: int = Query(default=0, ge=0),
+) -> list[AuditEntryOut]:
     from app.api.files import _get_file
 
     _get_file(db, user, file_id, PermissionLevel.read)
-    usernames = _usernames(db)
+    query = db.query(AuditLog).filter(AuditLog.file_id == file_id)
+    response.headers["X-Total-Count"] = str(query.count())
     records = (
-        db.query(AuditLog)
-        .filter(AuditLog.file_id == file_id)
-        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .limit(limit)
+        .offset(offset)
         .all()
     )
+    usernames = _usernames(db)
     return [_entry(r, usernames) for r in records]
 
 
@@ -113,9 +122,12 @@ def journal(
     return AuditPage(items=[_entry(r, usernames) for r in records], total=total)
 
 
+CSV_STREAM_CHUNK_SIZE = 500
+
+
 @router.get("/audit/export.csv")
 def export_csv(
-    db: DbDep,
+    request: Request,
     _: AdminUserOrTicket,
     user_id: int | None = None,
     action: AuditAction | None = None,
@@ -124,33 +136,51 @@ def export_csv(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> StreamingResponse:
-    query = _filtered(db, user_id, action, file_id, folder_id, date_from, date_to)
-    records = query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).all()
-    usernames = _usernames(db)
+    # The request-scoped `db` session (DbDep) closes as soon as this endpoint
+    # function returns, before Starlette drains a StreamingResponse body — so
+    # the generator opens its own session for the life of the export instead,
+    # reading `yield_per` chunks straight from the DB cursor rather than
+    # materializing the whole filtered result list in memory up front. It
+    # resolves the session through the same `get_db` the app is wired with
+    # (honoring `app.dependency_overrides`, e.g. the test suite's per-test
+    # sqlite fixture) instead of importing `SessionLocal` directly, which
+    # would silently bypass that override and hit the real configured
+    # database even under tests.
+    db_dependency = request.app.dependency_overrides.get(get_db, get_db)
 
     def rows() -> Iterator[str]:
-        buffer = io.StringIO()
-        writer = csv.writer(buffer)
-        writer.writerow(CSV_COLUMNS)
-        for r in records:
-            entry = _entry(r, usernames)
-            writer.writerow(
-                [
-                    entry.id,
-                    entry.created_at.isoformat(),
-                    entry.username or "",
-                    entry.action.value,
-                    entry.file_id or "",
-                    entry.folder_id or "",
-                    entry.file_version_id or "",
-                    entry.target_user_id or "",
-                    entry.ip or "",
-                    json.dumps(entry.details, ensure_ascii=False) if entry.details else "",
-                ]
-            )
-            yield buffer.getvalue()
-            buffer.seek(0)
-            buffer.truncate(0)
+        session_gen = db_dependency()
+        session = next(session_gen)
+        try:
+            query = _filtered(
+                session, user_id, action, file_id, folder_id, date_from, date_to
+            ).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+            usernames = _usernames(session)
+
+            buffer = io.StringIO()
+            writer = csv.writer(buffer)
+            writer.writerow(CSV_COLUMNS)
+            for r in query.yield_per(CSV_STREAM_CHUNK_SIZE):
+                entry = _entry(r, usernames)
+                writer.writerow(
+                    [
+                        entry.id,
+                        entry.created_at.isoformat(),
+                        entry.username or "",
+                        entry.action.value,
+                        entry.file_id or "",
+                        entry.folder_id or "",
+                        entry.file_version_id or "",
+                        entry.target_user_id or "",
+                        entry.ip or "",
+                        json.dumps(entry.details, ensure_ascii=False) if entry.details else "",
+                    ]
+                )
+                yield buffer.getvalue()
+                buffer.seek(0)
+                buffer.truncate(0)
+        finally:
+            session_gen.close()
 
     return StreamingResponse(
         rows(),
