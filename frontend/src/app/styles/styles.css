@@ -135,7 +135,7 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
 
 /* ---------- app shell ---------- */
 
-.shell { display: flex; flex-direction: column; min-height: 100vh; }
+.shell { display: flex; flex-direction: column; height: 100vh; }
 .topbar {
   display: flex;
   align-items: center;
@@ -268,7 +268,7 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
 .tree-row .arrow.expanded { transform: rotate(90deg); }
 .tree-children { margin-left: 14px; border-left: 1px solid var(--line); padding-left: 4px; }
 
-.content { grid-area: 1 / 2; padding: 20px 24px; overflow-y: auto; min-width: 0; }
+.content { grid-area: 1 / 2; padding: 0 24px 20px; overflow-y: auto; min-width: 0; }
 .content-head {
   display: flex;
   align-items: center;
@@ -278,6 +278,15 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
 }
 .content-head h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
 .content-head .spacer { flex: 1; }
+
+.content-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-top: 20px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
 
 .upload-banner {
   display: flex;
@@ -375,6 +384,7 @@ td .file-name { cursor: pointer; font-weight: 500; }
 td .file-name:hover { text-decoration: underline; }
 
 .empty {
+  margin-top: 20px;
   padding: 48px 24px;
   text-align: center;
   color: var(--steel);

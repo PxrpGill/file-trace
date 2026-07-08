@@ -139,34 +139,71 @@ export function BrowserPage() {
           <div className="empty">Выберите папку слева, чтобы увидеть файлы</div>
         ) : (
           <>
-            <div className="content-head">
-              <h1>{selected.name}</h1>
-              <span className="muted">
-                {canWrite ? 'чтение и изменение' : 'только чтение'}
-              </span>
-              <span className="spacer" />
-              {canWrite && (
-                <>
-                  <UploadFileButton folderId={selected.id} onError={setErrorMessage} />
-                  {/* <UploadTreeButton folderId={selected.id} onError={setErrorMessage} /> */}
-                  <CreateFolderAction
-                    parentId={selected.id}
-                    buttonLabel="+ Папка"
-                    dialogTitle={`Новая папка в «${selected.name}»`}
-                    onError={setErrorMessage}
-                  />
-                  <RenameFolderAction
-                    folder={selected}
-                    onRenamed={(name) => setSelected({ ...selected, name })}
-                    onError={setErrorMessage}
-                  />
-                  <DeleteFolderAction
-                    folder={selected}
-                    onDeleted={() => setSelected(null)}
-                    onError={setErrorMessage}
-                  />
-                </>
-              )}
+            <div className="content-sticky">
+              <div className="content-head">
+                <h1>{selected.name}</h1>
+                <span className="muted">
+                  {canWrite ? 'чтение и изменение' : 'только чтение'}
+                </span>
+                <span className="spacer" />
+                {canWrite && (
+                  <>
+                    <UploadFileButton folderId={selected.id} onError={setErrorMessage} />
+                    {/* <UploadTreeButton folderId={selected.id} onError={setErrorMessage} /> */}
+                    <CreateFolderAction
+                      parentId={selected.id}
+                      buttonLabel="+ Папка"
+                      dialogTitle={`Новая папка в «${selected.name}»`}
+                      onError={setErrorMessage}
+                    />
+                    <RenameFolderAction
+                      folder={selected}
+                      onRenamed={(name) => setSelected({ ...selected, name })}
+                      onError={setErrorMessage}
+                    />
+                    <DeleteFolderAction
+                      folder={selected}
+                      onDeleted={() => setSelected(null)}
+                      onError={setErrorMessage}
+                    />
+                  </>
+                )}
+              </div>
+
+              <SelectionToolbar count={selectedIds.size} onClear={() => setSelectedIds(new Set())}>
+                <BulkDownloadAction
+                  fileIds={[...selectedIds]}
+                  onResult={(result) => {
+                    setResultMessage(
+                      summarizeBulkResult('Скачано', result.files.length, selectedIds.size, result.skipped),
+                    )
+                  }}
+                  onError={setErrorMessage}
+                />{' '}
+                {canWrite && (
+                  <>
+                    <BulkMoveAction
+                      fileIds={[...selectedIds]}
+                      onDone={(result) => {
+                        setResultMessage(
+                          summarizeBulkResult('Перемещено', result.moved.length, selectedIds.size, result.skipped),
+                        )
+                        setSelectedIds(new Set())
+                      }}
+                      onError={setErrorMessage}
+                    />{' '}
+                    <BulkDeleteAction
+                      fileIds={[...selectedIds]}
+                      onDone={(result) => {
+                        setResultMessage(
+                          summarizeBulkResult('Удалено', result.deleted.length, selectedIds.size, result.skipped),
+                        )
+                        setSelectedIds(new Set())
+                      }}
+                    />
+                  </>
+                )}
+              </SelectionToolbar>
             </div>
 
             {uploadingCount > 0 && (
@@ -184,41 +221,6 @@ export function BrowserPage() {
                 </button>
               </div>
             )}
-
-            <SelectionToolbar count={selectedIds.size} onClear={() => setSelectedIds(new Set())}>
-              <BulkDownloadAction
-                fileIds={[...selectedIds]}
-                onResult={(result) => {
-                  setResultMessage(
-                    summarizeBulkResult('Скачано', result.files.length, selectedIds.size, result.skipped),
-                  )
-                }}
-                onError={setErrorMessage}
-              />{' '}
-              {canWrite && (
-                <>
-                  <BulkMoveAction
-                    fileIds={[...selectedIds]}
-                    onDone={(result) => {
-                      setResultMessage(
-                        summarizeBulkResult('Перемещено', result.moved.length, selectedIds.size, result.skipped),
-                      )
-                      setSelectedIds(new Set())
-                    }}
-                    onError={setErrorMessage}
-                  />{' '}
-                  <BulkDeleteAction
-                    fileIds={[...selectedIds]}
-                    onDone={(result) => {
-                      setResultMessage(
-                        summarizeBulkResult('Удалено', result.deleted.length, selectedIds.size, result.skipped),
-                      )
-                      setSelectedIds(new Set())
-                    }}
-                  />
-                </>
-              )}
-            </SelectionToolbar>
 
             <FileTable
               rows={files.data ?? []}
