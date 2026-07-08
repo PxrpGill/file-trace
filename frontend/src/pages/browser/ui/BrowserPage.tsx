@@ -170,6 +170,13 @@ export function BrowserPage() {
                 )}
               </div>
 
+              {uploadingCount > 0 && (
+                <div className="upload-banner" role="status">
+                  <span className="spinner" aria-hidden="true" />
+                  <span>Загружается файлов: {uploadingCount}…</span>
+                </div>
+              )}
+
               <SelectionToolbar count={selectedIds.size} onClear={() => setSelectedIds(new Set())}>
                 <BulkDownloadAction
                   fileIds={[...selectedIds]}
@@ -205,13 +212,6 @@ export function BrowserPage() {
                 )}
               </SelectionToolbar>
             </div>
-
-            {uploadingCount > 0 && (
-              <div className="upload-banner" role="status">
-                <span className="spinner" aria-hidden="true" />
-                <span>Загружается файлов: {uploadingCount}…</span>
-              </div>
-            )}
 
             {resultMessage && (
               <div className="bulk-result-banner">
