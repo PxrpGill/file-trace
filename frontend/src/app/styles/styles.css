@@ -299,6 +299,29 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
   to { transform: rotate(360deg); }
 }
 
+.drop-overlay {
+  grid-area: 1 / 2;
+  z-index: 5;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px;
+  padding: 24px;
+  text-align: center;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius);
+  background: rgba(250, 251, 253, 0.9);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 500;
+}
+.drop-overlay.denied {
+  border-color: var(--wax);
+  color: var(--wax);
+  background: rgba(246, 228, 224, 0.9);
+}
+
 /* ---------- tables ---------- */
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
