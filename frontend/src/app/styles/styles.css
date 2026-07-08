@@ -263,7 +263,7 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
 .tree-row.selected .lvl { color: #c8d2e0; }
 .tree-children { margin-left: 14px; border-left: 1px solid var(--line); padding-left: 4px; }
 
-.content { padding: 20px 24px; overflow-y: auto; min-width: 0; }
+.content { grid-area: 1 / 2; padding: 20px 24px; overflow-y: auto; min-width: 0; }
 .content-head {
   display: flex;
   align-items: center;
@@ -273,6 +273,54 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
 }
 .content-head h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
 .content-head .spacer { flex: 1; }
+
+.upload-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--wax);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.drop-overlay {
+  grid-area: 1 / 2;
+  z-index: 5;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px;
+  padding: 24px;
+  text-align: center;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius);
+  background: rgba(250, 251, 253, 0.9);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 500;
+}
+.drop-overlay.denied {
+  border-color: var(--wax);
+  color: var(--wax);
+  background: rgba(246, 228, 224, 0.9);
+}
 
 /* ---------- tables ---------- */
 
@@ -495,6 +543,7 @@ td .file-name:hover { text-decoration: underline; }
 @media (max-width: 720px) {
   .browser { grid-template-columns: 1fr; }
   .sidebar { border-right: none; border-bottom: 1px solid var(--line); max-height: 40vh; }
+  .content, .drop-overlay { grid-area: 2 / 1; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

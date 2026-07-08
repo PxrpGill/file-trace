@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useSession } from '@/entities/session'
 import type { FolderNode } from '@/entities/folder'
@@ -28,6 +28,8 @@ export function BrowserPage() {
   const [openFile, setOpenFile] = useState<FileItem | null>(null)
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
+  const [isDragOver, setIsDragOver] = useState(false)
+  const dragCounter = useRef(0)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const tree = useFolderTreeQuery()
@@ -45,6 +47,10 @@ export function BrowserPage() {
       select: (mutation) => mutation.options.mutationKey?.[1] as number,
     }),
   )
+
+  const uploadingCount = useMutationState({
+    filters: { mutationKey: ['upload-file'], status: 'pending' },
+  }).length
 
   useEffect(() => {
     const folderParam = searchParams.get('folder')
@@ -94,12 +100,26 @@ export function BrowserPage() {
 
       <main
         className="content"
+        onDragEnter={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return
+          dragCounter.current += 1
+          setIsDragOver(true)
+        }}
+        onDragLeave={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return
+          dragCounter.current = Math.max(0, dragCounter.current - 1)
+          if (dragCounter.current === 0) setIsDragOver(false)
+        }}
         onDragOver={(e) => {
-          if (canWrite) e.preventDefault()
+          if (!e.dataTransfer.types.includes('Files')) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = canWrite ? 'copy' : 'none'
         }}
         onDrop={(e) => {
-          if (!canWrite) return
           e.preventDefault()
+          dragCounter.current = 0
+          setIsDragOver(false)
+          if (!canWrite) return
           for (const f of Array.from(e.dataTransfer.files)) {
             uploadFile.mutate(f, { onError: () => setErrorMessage('Не удалось загрузить файл') })
           }
@@ -138,6 +158,13 @@ export function BrowserPage() {
                 </>
               )}
             </div>
+
+            {uploadingCount > 0 && (
+              <div className="upload-banner" role="status">
+                <span className="spinner" aria-hidden="true" />
+                <span>Загружается файлов: {uploadingCount}…</span>
+              </div>
+            )}
 
             {(files.data ?? []).length === 0 ? (
               <div className="empty">
@@ -237,6 +264,16 @@ export function BrowserPage() {
           </>
         )}
       </main>
+
+      {isDragOver && (
+        <div className={`drop-overlay${canWrite ? '' : ' denied'}`}>
+          {selected === null
+            ? 'Сначала выберите папку'
+            : canWrite
+              ? `Отпустите, чтобы загрузить в «${selected.name}»`
+              : 'Загрузка недоступна — только чтение'}
+        </div>
+      )}
 
       {openFile && <FileDrawer file={openFile} onClose={() => setOpenFile(null)} />}
 

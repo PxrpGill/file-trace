@@ -4,6 +4,7 @@ import { api } from '@/shared/api'
 export function useUploadFileMutation(folderId: number | null) {
   const queryClient = useQueryClient()
   return useMutation({
+    mutationKey: ['upload-file'],
     mutationFn: async (file: globalThis.File) => {
       const form = new FormData()
       form.append('upload', file)
