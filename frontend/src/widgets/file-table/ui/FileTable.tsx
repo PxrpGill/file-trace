@@ -1,6 +1,7 @@
-import { memo, useEffect, useRef } from 'react'
+import { memo, useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { FILE_IDS_DRAG_TYPE } from '@/entities/file'
 
 export interface FileTableColumn<T> {
   header: string
@@ -21,6 +22,8 @@ interface FileRowProps<T extends { id: number }> {
   selected: boolean
   highlighted: boolean
   onToggle: (id: number) => void
+  onContextMenu?: (row: T, x: number, y: number) => void
+  getDragIds?: (row: T) => number[]
 }
 
 function FileRowInner<T extends { id: number }>({
@@ -31,9 +34,31 @@ function FileRowInner<T extends { id: number }>({
   selected,
   highlighted,
   onToggle,
+  onContextMenu,
+  getDragIds,
 }: FileRowProps<T>) {
   return (
-    <tr className={highlighted ? 'highlighted' : undefined} style={{ height: ROW_HEIGHT }}>
+    <tr
+      className={highlighted ? 'highlighted' : undefined}
+      style={{ height: ROW_HEIGHT }}
+      draggable={Boolean(getDragIds)}
+      onDragStart={
+        getDragIds
+          ? (e) => {
+              e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setData(FILE_IDS_DRAG_TYPE, JSON.stringify(getDragIds(row)))
+            }
+          : undefined
+      }
+      onContextMenu={
+        onContextMenu
+          ? (e) => {
+              e.preventDefault()
+              onContextMenu(row, e.clientX, e.clientY)
+            }
+          : undefined
+      }
+    >
       <td className="select-col">
         <input
           type="checkbox"
@@ -69,6 +94,8 @@ export function FileTable<T extends { id: number }>({
   emptyMessage,
   onEndReached,
   highlightId,
+  onContextMenu,
+  draggable,
 }: {
   rows: T[]
   columns: FileTableColumn<T>[]
@@ -80,8 +107,21 @@ export function FileTable<T extends { id: number }>({
   emptyMessage: string
   onEndReached?: () => void
   highlightId?: number | null
+  onContextMenu?: (row: T, x: number, y: number) => void
+  draggable?: boolean
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Стабильная ссылка на функцию — не завязана на identity selectedIds,
+  // иначе передача её в FileRow каждый рендер обесценивала бы memo у всех
+  // строк (см. комментарий про FileRow ниже), хотя нужна свежая selectedIds
+  // только в момент самого drag'а.
+  const selectedIdsRef = useRef(selectedIds)
+  selectedIdsRef.current = selectedIds
+  const getDragIds = useCallback(
+    (row: T) => (selectedIdsRef.current.has(row.id) ? [...selectedIdsRef.current] : [row.id]),
+    [],
+  )
 
   // Рендерим только видимое окно строк — при тысячах файлов в папке это
   // единственный способ не создавать тысячи DOM-узлов сразу (см. аудит
@@ -158,6 +198,8 @@ export function FileTable<T extends { id: number }>({
                 selected={selectedIds.has(row.id)}
                 highlighted={row.id === highlightId}
                 onToggle={onToggle}
+                onContextMenu={onContextMenu}
+                getDragIds={draggable ? getDragIds : undefined}
               />
             )
           })}

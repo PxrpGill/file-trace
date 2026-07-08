@@ -56,6 +56,9 @@ export function PreviewModal({ file, onClose }: { file: FileItem; onClose: () =>
 
   return (
     <Modal title={file.name} onClose={onClose} className="modal-preview">
+      <button className="btn secondary small preview-close" onClick={onClose}>
+        Закрыть
+      </button>
       <div className="preview-body">{renderBody()}</div>
     </Modal>
   )

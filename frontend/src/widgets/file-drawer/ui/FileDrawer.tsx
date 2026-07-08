@@ -1,11 +1,12 @@
+import { Eye } from 'lucide-react'
 import type { FileItem, FileVersion } from '@/entities/file'
-import { useFileAuditQuery, useFileVersionsQuery } from '@/entities/file'
+import { useFileAuditQuery, useFileVersionsQuery, getPreviewKind } from '@/entities/file'
 import type { AuditEntry } from '@/entities/audit'
 import { ACTION_LABELS } from '@/entities/audit'
 import { formatDate, formatSize } from '@/shared/lib'
 import { DownloadFileButton } from '@/features/file/download-file'
 
-const WAX_ACTIONS = new Set(['file_delete', 'file_purge', 'login_failed', 'permission_revoke'])
+const DANGER_ACTIONS = new Set(['file_delete', 'file_purge', 'login_failed', 'permission_revoke'])
 
 function detailLine(entry: AuditEntry): string | null {
   const d = entry.details
@@ -18,10 +19,19 @@ function detailLine(entry: AuditEntry): string | null {
   return null
 }
 
-export function FileDrawer({ file, onClose }: { file: FileItem; onClose: () => void }) {
+export function FileDrawer({
+  file,
+  onClose,
+  onOpenPreview,
+}: {
+  file: FileItem
+  onClose: () => void
+  onOpenPreview?: () => void
+}) {
   const versions = useFileVersionsQuery(file.id)
   const history = useFileAuditQuery(file.id)
   const historyEntries = history.data?.pages.flatMap((page) => page.items) ?? []
+  const canPreview = onOpenPreview && getPreviewKind(file.name) !== null
 
   return (
     <>
@@ -34,6 +44,13 @@ export function FileDrawer({ file, onClose }: { file: FileItem; onClose: () => v
           </button>
         </header>
         <div className="body">
+          {canPreview && (
+            <button type="button" className="drawer-preview-link" onClick={onOpenPreview}>
+              <Eye size={16} aria-hidden strokeWidth={1.75} />
+              Открыть предпросмотр
+            </button>
+          )}
+
           <h3>Версии</h3>
           {(versions.data ?? []).slice().reverse().map((v: FileVersion) => (
             <div className="version-row" key={v.id}>
@@ -51,7 +68,7 @@ export function FileDrawer({ file, onClose }: { file: FileItem; onClose: () => v
           <h3>История действий</h3>
           <ul className="trace">
             {historyEntries.map((entry) => (
-              <li key={entry.id} className={WAX_ACTIONS.has(entry.action) ? 'wax' : ''}>
+              <li key={entry.id} className={DANGER_ACTIONS.has(entry.action) ? 'danger' : ''}>
                 <span className="stamp">{ACTION_LABELS[entry.action]}</span>
                 <span className="when">{formatDate(entry.created_at)}</span>
                 <div className="who-line">

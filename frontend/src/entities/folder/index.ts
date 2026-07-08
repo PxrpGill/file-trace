@@ -1,4 +1,5 @@
 export type { FolderNode, FolderSearchResult } from './model/types'
 export { flattenTree } from './model/flatten-tree'
+export { findAncestorChain } from './model/find-ancestors'
 export { useFolderTreeQuery } from './api/folder-api'
 export { FolderPicker } from './ui/FolderPicker'

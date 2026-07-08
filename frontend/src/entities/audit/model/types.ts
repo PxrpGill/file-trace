@@ -1,7 +1,7 @@
 export type AuditAction =
   | 'login' | 'login_failed' | 'logout'
   | 'file_upload' | 'file_download' | 'file_new_version'
-  | 'file_rename' | 'file_move' | 'file_delete' | 'file_restore' | 'file_purge' | 'file_extract'
+  | 'file_rename' | 'file_move' | 'file_delete' | 'file_restore' | 'file_purge' | 'file_extract' | 'file_preview'
   | 'folder_create' | 'folder_rename' | 'folder_delete'
   | 'user_create' | 'user_update' | 'user_password_reset'
   | 'permission_grant' | 'permission_revoke'

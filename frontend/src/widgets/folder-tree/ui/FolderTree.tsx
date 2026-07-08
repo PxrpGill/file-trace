@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react'
+import { ChevronRight, Folder, FolderOpen } from 'lucide-react'
 import type { FolderNode } from '@/entities/folder'
+import { findAncestorChain } from '@/entities/folder'
+import { FILE_IDS_DRAG_TYPE } from '@/entities/file'
 
 interface Props {
   nodes: FolderNode[]
   selectedId: number | null
   onSelect: (node: FolderNode) => void
+  onNodeContextMenu?: (node: FolderNode, x: number, y: number) => void
+  onFilesDrop?: (fileIds: number[], folderId: number) => void
 }
 
 interface TreeNodeProps {
@@ -13,30 +18,66 @@ interface TreeNodeProps {
   onSelect: (node: FolderNode) => void
   expanded: Set<number>
   onToggle: (id: number) => void
+  onNodeContextMenu?: (node: FolderNode, x: number, y: number) => void
+  onFilesDrop?: (fileIds: number[], folderId: number) => void
+  dragOverId: number | null
+  setDragOverId: (id: number | null) => void
 }
 
-function findAncestorIds(nodes: FolderNode[], targetId: number): number[] | null {
-  for (const node of nodes) {
-    if (node.id === targetId) return []
-    const childPath = findAncestorIds(node.children, targetId)
-    if (childPath !== null) return [node.id, ...childPath]
-  }
-  return null
-}
-
-function TreeNode({ node, selectedId, onSelect, expanded, onToggle }: TreeNodeProps) {
+function TreeNode({
+  node,
+  selectedId,
+  onSelect,
+  expanded,
+  onToggle,
+  onNodeContextMenu,
+  onFilesDrop,
+  dragOverId,
+  setDragOverId,
+}: TreeNodeProps) {
   const hasChildren = node.children.length > 0
   const isExpanded = hasChildren && expanded.has(node.id)
+  const isDragOver = dragOverId === node.id
+  const dragClass = isDragOver ? (node.level === 'write' ? ' drag-over' : ' drag-denied') : ''
 
   return (
     <div>
       <button
         type="button"
-        className={`tree-row ${node.id === selectedId ? 'selected' : ''}`}
+        className={`tree-row ${node.id === selectedId ? 'selected' : ''}${dragClass}`}
         aria-expanded={hasChildren ? isExpanded : undefined}
         onClick={() => {
           onSelect(node)
           if (hasChildren) onToggle(node.id)
+        }}
+        onContextMenu={
+          onNodeContextMenu
+            ? (e) => {
+                e.preventDefault()
+                onNodeContextMenu(node, e.clientX, e.clientY)
+              }
+            : undefined
+        }
+        onDragOver={(e) => {
+          if (!onFilesDrop || !e.dataTransfer.types.includes(FILE_IDS_DRAG_TYPE)) return
+          if (node.level === 'write') e.preventDefault()
+          setDragOverId(node.id)
+        }}
+        onDragLeave={(e) => {
+          if (!onFilesDrop || !e.dataTransfer.types.includes(FILE_IDS_DRAG_TYPE)) return
+          setDragOverId(dragOverId === node.id ? null : dragOverId)
+        }}
+        onDrop={(e) => {
+          if (!onFilesDrop || !e.dataTransfer.types.includes(FILE_IDS_DRAG_TYPE)) return
+          e.preventDefault()
+          setDragOverId(null)
+          if (node.level !== 'write') return
+          try {
+            const ids = JSON.parse(e.dataTransfer.getData(FILE_IDS_DRAG_TYPE)) as number[]
+            onFilesDrop(ids, node.id)
+          } catch {
+            // повреждённый payload перетаскивания — игнорируем
+          }
         }}
       >
         <span
@@ -44,8 +85,9 @@ function TreeNode({ node, selectedId, onSelect, expanded, onToggle }: TreeNodePr
           className={`arrow ${isExpanded ? 'expanded' : ''}`}
           style={hasChildren ? undefined : { visibility: 'hidden' }}
         >
-          ▸
+          <ChevronRight size={14} strokeWidth={2} />
         </span>
+        {isExpanded ? <FolderOpen size={15} aria-hidden strokeWidth={1.75} /> : <Folder size={15} aria-hidden strokeWidth={1.75} />}
         <span>{node.name}</span>
         <span className="lvl">{node.level === 'write' ? 'изм.' : 'чт.'}</span>
       </button>
@@ -59,6 +101,10 @@ function TreeNode({ node, selectedId, onSelect, expanded, onToggle }: TreeNodePr
               onSelect={onSelect}
               expanded={expanded}
               onToggle={onToggle}
+              onNodeContextMenu={onNodeContextMenu}
+              onFilesDrop={onFilesDrop}
+              dragOverId={dragOverId}
+              setDragOverId={setDragOverId}
             />
           ))}
         </div>
@@ -67,17 +113,18 @@ function TreeNode({ node, selectedId, onSelect, expanded, onToggle }: TreeNodePr
   )
 }
 
-export function FolderTree({ nodes, selectedId, onSelect }: Props) {
+export function FolderTree({ nodes, selectedId, onSelect, onNodeContextMenu, onFilesDrop }: Props) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [dragOverId, setDragOverId] = useState<number | null>(null)
 
   useEffect(() => {
     if (selectedId === null) return
-    const ancestorIds = findAncestorIds(nodes, selectedId)
-    if (!ancestorIds || ancestorIds.length === 0) return
+    const ancestors = findAncestorChain(nodes, selectedId)
+    if (!ancestors || ancestors.length === 0) return
     setExpanded((prev) => {
       let changed = false
       const next = new Set(prev)
-      for (const id of ancestorIds) {
+      for (const { id } of ancestors) {
         if (!next.has(id)) {
           next.add(id)
           changed = true
@@ -109,6 +156,10 @@ export function FolderTree({ nodes, selectedId, onSelect }: Props) {
           onSelect={onSelect}
           expanded={expanded}
           onToggle={toggle}
+          onNodeContextMenu={onNodeContextMenu}
+          onFilesDrop={onFilesDrop}
+          dragOverId={dragOverId}
+          setDragOverId={setDragOverId}
         />
       ))}
     </div>

@@ -31,6 +31,9 @@ export interface FileSearchResult {
 
 export type SearchResult = FileSearchResult | FolderSearchResult
 
+/** dataTransfer MIME-тип для drag-and-drop перемещения файлов на папку в дереве. */
+export const FILE_IDS_DRAG_TYPE = 'application/x-filetrace-ids'
+
 export interface BulkFailure {
   file_id: number
   reason: 'not_found' | 'forbidden'

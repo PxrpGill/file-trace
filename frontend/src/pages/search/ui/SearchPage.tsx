@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Folder } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useFileSearchQuery, summarizeBulkResult } from '@/entities/file'
+import { useFileSearchQuery, summarizeBulkResult, FileIcon } from '@/entities/file'
 import { useDebouncedValue, formatSize } from '@/shared/lib'
 import { Modal } from '@/shared/ui'
 import { FileTable, SelectionToolbar } from '@/widgets/file-table'
@@ -109,7 +110,10 @@ export function SearchPage() {
                     onClick={() => navigate(`/?folder=${folder.id}`)}
                     onKeyDown={(e) => e.key === 'Enter' && navigate(`/?folder=${folder.id}`)}
                   >
-                    <span className="file-name">{folder.name}</span>
+                    <span className="file-name">
+                      <Folder size={16} aria-hidden strokeWidth={1.75} />
+                      {folder.name}
+                    </span>
                     <span className="mono folder-name">{folder.parent_name ?? 'Корень'}</span>
                     <span className="mono">{LEVEL_LABELS[folder.level]}</span>
                   </div>
@@ -152,6 +156,7 @@ export function SearchPage() {
                     e.key === 'Enter' && navigate(`/?folder=${file.folder_id}&highlight=${file.id}`)
                   }
                 >
+                  <FileIcon name={file.name} />
                   {file.name}
                 </span>
               )}
@@ -164,7 +169,7 @@ export function SearchPage() {
       </main>
 
       {errorMessage && (
-        <Modal title="Не получилось" onClose={() => setErrorMessage('')}>
+        <Modal title="Не получилось" onClose={() => setErrorMessage('')} className="danger">
           <p style={{ margin: 0 }}>{errorMessage}</p>
           <div className="modal-actions">
             <button className="btn" onClick={() => setErrorMessage('')}>

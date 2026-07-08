@@ -69,7 +69,7 @@ export function ConfirmModal({ title, text, confirmLabel = 'Удалить', onC
   onClose: () => void
 }) {
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={onClose} className="danger">
       <p style={{ margin: 0 }}>{text}</p>
       <div className="modal-actions">
         <button type="button" className="btn secondary" onClick={onClose}>

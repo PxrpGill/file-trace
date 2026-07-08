@@ -2,16 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useSession } from '@/entities/session'
 import type { FolderNode } from '@/entities/folder'
-import { useFolderTreeQuery, flattenTree } from '@/entities/folder'
+import { useFolderTreeQuery, flattenTree, findAncestorChain } from '@/entities/folder'
 import type { FileItem } from '@/entities/file'
-import { useFilesQuery, isArchiveFile, getPreviewKind, summarizeBulkResult } from '@/entities/file'
+import { useFilesQuery, isArchiveFile, getPreviewKind, summarizeBulkResult, FileIcon } from '@/entities/file'
 import { useMutationState } from '@tanstack/react-query'
 import { formatDate, formatSize } from '@/shared/lib'
 import { Modal, ProgressBar } from '@/shared/ui'
 import { FileTable, SelectionToolbar } from '@/widgets/file-table'
 import type { FileTableColumn } from '@/widgets/file-table'
+import { FileGrid } from '@/widgets/file-grid'
+import { ViewToggle } from '@/widgets/view-toggle'
 import { FolderTree } from '@/widgets/folder-tree'
 import { FileDrawer } from '@/widgets/file-drawer'
+import { Breadcrumbs } from '@/widgets/breadcrumbs'
+import { FileContextMenu, FolderContextMenu } from '@/widgets/context-menu'
 import { CreateFolderAction } from '@/features/folder/create'
 import { RenameFolderAction } from '@/features/folder/rename'
 import { DeleteFolderAction } from '@/features/folder/delete'
@@ -22,9 +26,14 @@ import { DeleteFileAction } from '@/features/file/delete-file'
 import { DownloadFileButton } from '@/features/file/download-file'
 import { ExtractArchiveAction } from '@/features/file/extract-archive'
 import { PreviewModal } from '@/features/file/preview-file'
-import { BulkMoveAction } from '@/features/file/bulk-move'
+import { BulkMoveAction, useBulkMoveMutation } from '@/features/file/bulk-move'
 import { BulkDeleteAction } from '@/features/file/bulk-delete'
 import { BulkDownloadAction } from '@/features/file/bulk-download'
+
+type ContextMenuState =
+  | { kind: 'file'; file: FileItem; x: number; y: number }
+  | { kind: 'folder'; folder: FolderNode; x: number; y: number }
+  | null
 
 export function BrowserPage() {
   const { user } = useSession()
@@ -35,6 +44,10 @@ export function BrowserPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [resultMessage, setResultMessage] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(
+    () => (localStorage.getItem('file-trace:view-mode') === 'grid' ? 'grid' : 'list'),
+  )
   const [isDragOver, setIsDragOver] = useState(false)
   const dragCounter = useRef(0)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -45,6 +58,7 @@ export function BrowserPage() {
   const files = useFilesQuery(selected?.id ?? null)
   const fileRows = useMemo(() => files.data?.pages.flatMap((page) => page.items) ?? [], [files.data])
   const uploadFile = useUploadFileMutation(selected?.id ?? null)
+  const bulkMove = useBulkMoveMutation()
 
   const startUpload = async (file: globalThis.File) => {
     const id = ++uploadIdRef.current
@@ -82,6 +96,10 @@ export function BrowserPage() {
   }, [selected?.id])
 
   useEffect(() => {
+    localStorage.setItem('file-trace:view-mode', viewMode)
+  }, [viewMode])
+
+  useEffect(() => {
     const folderParam = searchParams.get('folder')
     if (!folderParam || !tree.data) return
     const folderId = Number(folderParam)
@@ -103,6 +121,12 @@ export function BrowserPage() {
 
   const canWrite = selected?.level === 'write'
   const isAdmin = user?.role === 'admin'
+
+  const breadcrumbChain = useMemo(() => {
+    if (!selected) return []
+    const ancestors = findAncestorChain(tree.data ?? [], selected.id) ?? []
+    return [...ancestors, selected]
+  }, [tree.data, selected])
 
   const onToggleFile = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -151,6 +175,7 @@ export function BrowserPage() {
         onClick={() => setOpenFile(file)}
         onKeyDown={(e) => e.key === 'Enter' && setOpenFile(file)}
       >
+        <FileIcon name={file.name} />
         {file.name}
       </span>
     ),
@@ -210,6 +235,21 @@ export function BrowserPage() {
             setSelected(node)
             setOpenFile(null)
           }}
+          onNodeContextMenu={(node, x, y) => setContextMenu({ kind: 'folder', folder: node, x, y })}
+          onFilesDrop={(fileIds, folderId) => {
+            bulkMove.mutate(
+              { fileIds, folderId },
+              {
+                onSuccess: (result) => {
+                  setResultMessage(
+                    summarizeBulkResult('Перемещено', result.moved.length, fileIds.length, result.skipped),
+                  )
+                  setSelectedIds(new Set())
+                },
+                onError: () => setErrorMessage('Не удалось переместить файлы'),
+              },
+            )
+          }}
         />
         {isAdmin && (
           <CreateFolderAction
@@ -257,12 +297,20 @@ export function BrowserPage() {
         ) : (
           <>
             <div className="content-sticky">
+              <Breadcrumbs
+                chain={breadcrumbChain}
+                onNavigate={(node) => {
+                  setSelected(node)
+                  setOpenFile(null)
+                }}
+              />
               <div className="content-head">
                 <h1>{selected.name}</h1>
                 <span className="muted">
                   {canWrite ? 'чтение и изменение' : 'только чтение'}
                 </span>
                 <span className="spacer" />
+                <ViewToggle value={viewMode} onChange={setViewMode} />
                 {canWrite && (
                   <>
                     <UploadFileButton onFilesSelected={(files) => files.forEach(startUpload)} />
@@ -343,25 +391,53 @@ export function BrowserPage() {
               </div>
             )}
 
-            <FileTable
-              rows={fileRows}
-              emptyMessage={
-                'В папке пока нет файлов' +
-                (canWrite ? ' — перетащите файл сюда или нажмите «Загрузить файл»' : '')
-              }
-              selectedIds={selectedIds}
-              onToggle={onToggleFile}
-              onToggleAll={onToggleAllFiles}
-              columns={fileColumns}
-              renderName={renderName}
-              renderActions={renderActions}
-              highlightId={highlightedFileId}
-              onEndReached={
-                files.hasNextPage && !files.isFetchingNextPage
-                  ? () => files.fetchNextPage()
-                  : undefined
-              }
-            />
+            {viewMode === 'list' ? (
+              <FileTable
+                rows={fileRows}
+                emptyMessage={
+                  'В папке пока нет файлов' +
+                  (canWrite ? ' — перетащите файл сюда или нажмите «Загрузить файл»' : '')
+                }
+                selectedIds={selectedIds}
+                onToggle={onToggleFile}
+                onToggleAll={onToggleAllFiles}
+                columns={fileColumns}
+                renderName={renderName}
+                renderActions={renderActions}
+                highlightId={highlightedFileId}
+                onContextMenu={(file, x, y) => setContextMenu({ kind: 'file', file, x, y })}
+                draggable={canWrite}
+                onEndReached={
+                  files.hasNextPage && !files.isFetchingNextPage
+                    ? () => files.fetchNextPage()
+                    : undefined
+                }
+              />
+            ) : (
+              <FileGrid
+                rows={fileRows}
+                emptyMessage={
+                  'В папке пока нет файлов' +
+                  (canWrite ? ' — перетащите файл сюда или нажмите «Загрузить файл»' : '')
+                }
+                selectedIds={selectedIds}
+                onToggle={onToggleFile}
+                onOpenRow={(file) => setOpenFile(file)}
+                renderIcon={(file) => <FileIcon name={file.name} size={32} />}
+                renderName={(file) => file.name}
+                renderMeta={(file) =>
+                  file.current_version ? formatSize(file.current_version.size) : '—'
+                }
+                highlightId={highlightedFileId}
+                onContextMenu={(file, x, y) => setContextMenu({ kind: 'file', file, x, y })}
+                draggable={canWrite}
+                onEndReached={
+                  files.hasNextPage && !files.isFetchingNextPage
+                    ? () => files.fetchNextPage()
+                    : undefined
+                }
+              />
+            )}
           </>
         )}
       </main>
@@ -376,12 +452,47 @@ export function BrowserPage() {
         </div>
       )}
 
-      {openFile && <FileDrawer file={openFile} onClose={() => setOpenFile(null)} />}
+      {openFile && (
+        <FileDrawer
+          file={openFile}
+          onClose={() => setOpenFile(null)}
+          onOpenPreview={() => setPreviewFile(openFile)}
+        />
+      )}
 
       {previewFile && <PreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
 
+      {contextMenu?.kind === 'file' && (
+        <FileContextMenu
+          file={contextMenu.file}
+          canWrite={canWrite}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onOpenPreview={() => setPreviewFile(contextMenu.file)}
+          onError={setErrorMessage}
+        />
+      )}
+
+      {contextMenu?.kind === 'folder' && (
+        <FolderContextMenu
+          folder={contextMenu.folder}
+          canWrite={contextMenu.folder.level === 'write'}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onRenamed={(name) => {
+            if (selected?.id === contextMenu.folder.id) setSelected({ ...selected, name })
+          }}
+          onDeleted={() => {
+            if (selected?.id === contextMenu.folder.id) setSelected(null)
+          }}
+          onError={setErrorMessage}
+        />
+      )}
+
       {errorMessage && (
-        <Modal title="Не получилось" onClose={() => setErrorMessage('')}>
+        <Modal title="Не получилось" onClose={() => setErrorMessage('')} className="danger">
           <p style={{ margin: 0 }}>{errorMessage}</p>
           <div className="modal-actions">
             <button className="btn" onClick={() => setErrorMessage('')}>
