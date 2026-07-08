@@ -290,8 +290,10 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
 
 .upload-banner {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 160px;
+  overflow-y: auto;
   margin-bottom: 12px;
   padding: 8px 12px;
   border: 1px solid var(--line);
@@ -299,6 +301,17 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
   background: var(--surface);
   font-family: var(--font-mono);
   font-size: 12px;
+}
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.upload-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bulk-toolbar {

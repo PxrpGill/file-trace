@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 import type { FileItem } from '@/entities/file'
+import { ProgressBar } from '@/shared/ui'
 import { useCreateVersionMutation } from '../model/use-create-version'
 
 export function UploadVersionButton({
@@ -17,15 +17,7 @@ export function UploadVersionButton({
   const [progress, setProgress] = useState<number | null>(null)
 
   if (progress !== null) {
-    return (
-      <span
-        className="version-progress"
-        style={{ '--pct': `${progress}%` } as CSSProperties}
-      >
-        <span className="version-progress-fill" />
-        <span className="version-progress-label">{progress}%</span>
-      </span>
-    )
+    return <ProgressBar percent={progress} />
   }
 
   return (

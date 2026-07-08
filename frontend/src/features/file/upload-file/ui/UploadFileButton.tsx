@@ -1,15 +1,11 @@
 import { useRef } from 'react'
-import { useUploadFileMutation } from '../model/use-upload-file'
 
 export function UploadFileButton({
-  folderId,
-  onError,
+  onFilesSelected,
 }: {
-  folderId: number
-  onError?: (message: string) => void
+  onFilesSelected: (files: File[]) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const uploadFile = useUploadFileMutation(folderId)
 
   return (
     <>
@@ -22,9 +18,7 @@ export function UploadFileButton({
         hidden
         multiple
         onChange={(e) => {
-          for (const f of Array.from(e.target.files ?? [])) {
-            uploadFile.mutate(f, { onError: () => onError?.('Не удалось загрузить файл') })
-          }
+          onFilesSelected(Array.from(e.target.files ?? []))
           e.target.value = ''
         }}
       />

@@ -7,7 +7,7 @@ import type { FileItem } from '@/entities/file'
 import { useFilesQuery, isArchiveFile, getPreviewKind, summarizeBulkResult } from '@/entities/file'
 import { useMutationState } from '@tanstack/react-query'
 import { formatDate, formatSize } from '@/shared/lib'
-import { Modal } from '@/shared/ui'
+import { Modal, ProgressBar } from '@/shared/ui'
 import { FileTable, SelectionToolbar } from '@/widgets/file-table'
 import { FolderTree } from '@/widgets/folder-tree'
 import { FileDrawer } from '@/widgets/file-drawer'
@@ -36,10 +36,28 @@ export function BrowserPage() {
   const [isDragOver, setIsDragOver] = useState(false)
   const dragCounter = useRef(0)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [uploads, setUploads] = useState<{ id: number; name: string; progress: number }[]>([])
+  const uploadIdRef = useRef(0)
 
   const tree = useFolderTreeQuery()
   const files = useFilesQuery(selected?.id ?? null)
   const uploadFile = useUploadFileMutation(selected?.id ?? null)
+
+  const startUpload = async (file: globalThis.File) => {
+    const id = ++uploadIdRef.current
+    setUploads((u) => [...u, { id, name: file.name, progress: 0 }])
+    try {
+      await uploadFile.mutateAsync({
+        file,
+        onProgress: (progress) =>
+          setUploads((u) => u.map((x) => (x.id === id ? { ...x, progress } : x))),
+      })
+    } catch {
+      setErrorMessage('Не удалось загрузить файл')
+    } finally {
+      setUploads((u) => u.filter((x) => x.id !== id))
+    }
+  }
   const uploadingVersionIds = new Set(
     useMutationState({
       filters: { mutationKey: ['create-version'], status: 'pending' },
@@ -52,10 +70,6 @@ export function BrowserPage() {
       select: (mutation) => mutation.options.mutationKey?.[1] as number,
     }),
   )
-
-  const uploadingCount = useMutationState({
-    filters: { mutationKey: ['upload-file'], status: 'pending' },
-  }).length
 
   useEffect(() => {
     setSelectedIds(new Set())
@@ -131,7 +145,7 @@ export function BrowserPage() {
           setIsDragOver(false)
           if (!canWrite) return
           for (const f of Array.from(e.dataTransfer.files)) {
-            uploadFile.mutate(f, { onError: () => setErrorMessage('Не удалось загрузить файл') })
+            startUpload(f)
           }
         }}
       >
@@ -148,7 +162,7 @@ export function BrowserPage() {
                 <span className="spacer" />
                 {canWrite && (
                   <>
-                    <UploadFileButton folderId={selected.id} onError={setErrorMessage} />
+                    <UploadFileButton onFilesSelected={(files) => files.forEach(startUpload)} />
                     {/* <UploadTreeButton folderId={selected.id} onError={setErrorMessage} /> */}
                     <CreateFolderAction
                       parentId={selected.id}
@@ -170,10 +184,14 @@ export function BrowserPage() {
                 )}
               </div>
 
-              {uploadingCount > 0 && (
+              {uploads.length > 0 && (
                 <div className="upload-banner" role="status">
-                  <span className="spinner" aria-hidden="true" />
-                  <span>Загружается файлов: {uploadingCount}…</span>
+                  {uploads.map((u) => (
+                    <div key={u.id} className="upload-row">
+                      <span className="upload-name">{u.name}</span>
+                      <ProgressBar percent={u.progress} />
+                    </div>
+                  ))}
                 </div>
               )}
 

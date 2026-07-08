@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import { ProgressBar } from '@/shared/ui'
 import { useUploadTreeMutation } from '../model/use-upload-tree'
 
 export function UploadTreeButton({
@@ -14,15 +14,7 @@ export function UploadTreeButton({
   const [progress, setProgress] = useState<number | null>(null)
 
   if (progress !== null) {
-    return (
-      <span
-        className="version-progress"
-        style={{ '--pct': `${progress}%` } as CSSProperties}
-      >
-        <span className="version-progress-fill" />
-        <span className="version-progress-label">{progress}%</span>
-      </span>
-    )
+    return <ProgressBar percent={progress} />
   }
 
   return (
