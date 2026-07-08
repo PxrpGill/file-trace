@@ -543,6 +543,7 @@ td .file-name:hover { text-decoration: underline; }
 @media (max-width: 720px) {
   .browser { grid-template-columns: 1fr; }
   .sidebar { border-right: none; border-bottom: 1px solid var(--line); max-height: 40vh; }
+  .content, .drop-overlay { grid-area: 2 / 1; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
