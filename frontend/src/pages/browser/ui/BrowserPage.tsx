@@ -160,7 +160,7 @@ export function BrowserPage() {
             </div>
 
             {uploadingCount > 0 && (
-              <div className="upload-banner">
+              <div className="upload-banner" role="status">
                 <span className="spinner" aria-hidden="true" />
                 <span>Загружается файлов: {uploadingCount}…</span>
               </div>
