@@ -3,6 +3,7 @@ export type {
   FileSearchResult,
   FileVersion,
   PreviewKind,
+  SearchResult,
   BulkFailure,
   BulkMoveResult,
   BulkDeleteResult,

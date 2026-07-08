@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { api } from '@/shared/api'
 import type { AuditEntry } from '@/entities/audit'
-import type { FileItem, FileSearchResult, FileVersion } from '../model/types'
+import type { FileItem, FileVersion, SearchResult } from '../model/types'
 
 const PAGE_SIZE = 200
 
@@ -43,7 +43,7 @@ export function useFileSearchQuery(query: string) {
     queryKey: ['file-search', term],
     enabled: term.length >= 2,
     queryFn: async () =>
-      (await api.get<FileSearchResult[]>('/api/files/search', { params: { q: term } })).data,
+      (await api.get<SearchResult[]>('/api/files/search', { params: { q: term } })).data,
   })
 }
 

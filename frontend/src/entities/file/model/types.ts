@@ -1,4 +1,5 @@
 import type { PermissionLevel } from '@/entities/permission'
+import type { FolderSearchResult } from '@/entities/folder'
 
 export interface FileVersion {
   id: number
@@ -19,6 +20,7 @@ export interface FileItem {
 }
 
 export interface FileSearchResult {
+  type: 'file'
   id: number
   folder_id: number
   folder_name: string
@@ -26,6 +28,8 @@ export interface FileSearchResult {
   level: PermissionLevel
   current_version: FileVersion | null
 }
+
+export type SearchResult = FileSearchResult | FolderSearchResult
 
 export interface BulkFailure {
   file_id: number

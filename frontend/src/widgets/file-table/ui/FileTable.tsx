@@ -1,4 +1,4 @@
-import { memo, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
@@ -19,6 +19,7 @@ interface FileRowProps<T extends { id: number }> {
   renderName: (row: T) => ReactNode
   renderActions: (row: T) => ReactNode
   selected: boolean
+  highlighted: boolean
   onToggle: (id: number) => void
 }
 
@@ -28,10 +29,11 @@ function FileRowInner<T extends { id: number }>({
   renderName,
   renderActions,
   selected,
+  highlighted,
   onToggle,
 }: FileRowProps<T>) {
   return (
-    <tr style={{ height: ROW_HEIGHT }}>
+    <tr className={highlighted ? 'highlighted' : undefined} style={{ height: ROW_HEIGHT }}>
       <td className="select-col">
         <input
           type="checkbox"
@@ -66,6 +68,7 @@ export function FileTable<T extends { id: number }>({
   onToggleAll,
   emptyMessage,
   onEndReached,
+  highlightId,
 }: {
   rows: T[]
   columns: FileTableColumn<T>[]
@@ -76,6 +79,7 @@ export function FileTable<T extends { id: number }>({
   onToggleAll: (checked: boolean) => void
   emptyMessage: string
   onEndReached?: () => void
+  highlightId?: number | null
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -88,6 +92,12 @@ export function FileTable<T extends { id: number }>({
     estimateSize: () => ROW_HEIGHT,
     overscan: 12,
   })
+
+  useEffect(() => {
+    if (highlightId == null) return
+    const index = rows.findIndex((row) => row.id === highlightId)
+    if (index >= 0) rowVirtualizer.scrollToIndex(index, { align: 'center' })
+  }, [highlightId, rows, rowVirtualizer])
 
   if (rows.length === 0) {
     return <div className="empty">{emptyMessage}</div>
@@ -146,6 +156,7 @@ export function FileTable<T extends { id: number }>({
                 renderName={renderName}
                 renderActions={renderActions}
                 selected={selectedIds.has(row.id)}
+                highlighted={row.id === highlightId}
                 onToggle={onToggle}
               />
             )

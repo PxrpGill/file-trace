@@ -30,6 +30,7 @@ export function BrowserPage() {
   const { user } = useSession()
   const [selected, setSelected] = useState<FolderNode | null>(null)
   const [openFile, setOpenFile] = useState<FileItem | null>(null)
+  const [highlightedFileId, setHighlightedFileId] = useState<number | null>(null)
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [resultMessage, setResultMessage] = useState('')
@@ -77,6 +78,7 @@ export function BrowserPage() {
   useEffect(() => {
     setSelectedIds(new Set())
     setResultMessage('')
+    setHighlightedFileId(null)
   }, [selected?.id])
 
   useEffect(() => {
@@ -89,12 +91,12 @@ export function BrowserPage() {
   }, [searchParams, tree.data])
 
   useEffect(() => {
-    const fileParam = searchParams.get('file')
-    if (!fileParam || fileRows.length === 0) return
-    const fileId = Number(fileParam)
+    const highlightParam = searchParams.get('highlight')
+    if (!highlightParam || fileRows.length === 0) return
+    const fileId = Number(highlightParam)
     const match = fileRows.find((f) => f.id === fileId)
     if (match) {
-      setOpenFile(match)
+      setHighlightedFileId(match.id)
       setSearchParams({}, { replace: true })
     }
   }, [searchParams, fileRows])
@@ -222,6 +224,9 @@ export function BrowserPage() {
 
       <main
         className="content"
+        onClickCapture={() => {
+          if (highlightedFileId !== null) setHighlightedFileId(null)
+        }}
         onDragEnter={(e) => {
           if (!e.dataTransfer.types.includes('Files')) return
           dragCounter.current += 1
@@ -350,6 +355,7 @@ export function BrowserPage() {
               columns={fileColumns}
               renderName={renderName}
               renderActions={renderActions}
+              highlightId={highlightedFileId}
               onEndReached={
                 files.hasNextPage && !files.isFetchingNextPage
                   ? () => files.fetchNextPage()

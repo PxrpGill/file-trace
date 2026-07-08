@@ -217,6 +217,15 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
 }
 .search-results li.empty:hover { background: transparent; }
 .search-results .folder-name { color: var(--steel); white-space: nowrap; }
+.search-results li.search-group-label {
+  cursor: default;
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--steel);
+}
+.search-results li.search-group-label:hover { background: transparent; }
 
 /* ---------- browser layout ---------- */
 
@@ -401,9 +410,29 @@ td {
 }
 tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: #f4f7fb; }
+tbody tr.highlighted { background: var(--wax-soft); }
 td.actions { text-align: right; white-space: nowrap; }
 td .file-name { cursor: pointer; font-weight: 500; }
 td .file-name:hover { text-decoration: underline; }
+
+.folder-results {
+  margin-bottom: 16px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.folder-result-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--surface);
+  cursor: pointer;
+}
+.folder-result-row:last-child { border-bottom: none; }
+.folder-result-row:hover { background: #f4f7fb; }
+.folder-result-row .folder-name { margin-right: auto; }
 
 .empty {
   margin-top: 20px;

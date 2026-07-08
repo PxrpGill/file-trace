@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -35,12 +36,24 @@ class FileUpdate(BaseModel):
 
 
 class FileSearchResult(BaseModel):
+    type: Literal["file"] = "file"
     id: int
     folder_id: int
     folder_name: str
     name: str
     level: PermissionLevel
     current_version: FileVersionOut | None
+
+    model_config = {"from_attributes": True}
+
+
+class FolderSearchResult(BaseModel):
+    type: Literal["folder"] = "folder"
+    id: int
+    parent_id: int | None
+    parent_name: str | None
+    name: str
+    level: PermissionLevel
 
     model_config = {"from_attributes": True}
 

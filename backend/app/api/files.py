@@ -5,11 +5,13 @@ import tempfile
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session, selectinload
+from pydantic import Field
+from sqlalchemy.orm import Session, aliased, selectinload
 from starlette.background import BackgroundTask
 
 from app.api.deps import (
@@ -42,6 +44,7 @@ from app.schemas.files import (
     FileSearchResult,
     FileUpdate,
     FileVersionOut,
+    FolderSearchResult,
     UploadTreeResult,
 )
 from app.services import audit
@@ -192,13 +195,16 @@ def list_files(
     return query.order_by(File.name).limit(limit).offset(offset).all()
 
 
-@router.get("/files/search", response_model=list[FileSearchResult])
+@router.get(
+    "/files/search",
+    response_model=list[Annotated[FileSearchResult | FolderSearchResult, Field(discriminator="type")]],
+)
 def search_files(
     db: DbDep,
     user: ActiveUser,
     q: str = Query(..., min_length=1, max_length=255),
     limit: int = Query(default=50, le=100),
-) -> list[FileSearchResult]:
+) -> list[FileSearchResult | FolderSearchResult]:
     term = q.strip()
     if len(term) < MIN_SEARCH_QUERY_LENGTH:
         return []
@@ -210,7 +216,7 @@ def search_files(
 
     # Read-only listing, like list_files/list_versions — no audit record,
     # since it discloses nothing beyond what browsing folders already reveals.
-    rows = (
+    file_rows = (
         db.query(File, Folder.name)
         .options(selectinload(File.versions))
         .join(Folder, File.folder_id == Folder.id)
@@ -221,7 +227,7 @@ def search_files(
         .limit(limit)
         .all()
     )
-    return [
+    file_results = [
         FileSearchResult(
             id=file.id,
             folder_id=file.folder_id,
@@ -230,8 +236,33 @@ def search_files(
             level=levels[file.folder_id],
             current_version=file.current_version,
         )
-        for file, folder_name in rows
+        for file, folder_name in file_rows
     ]
+
+    parent = aliased(Folder)
+    folder_rows = (
+        db.query(Folder, parent.name)
+        .outerjoin(parent, Folder.parent_id == parent.id)
+        .filter(Folder.id.in_(folder_ids))
+        .filter(Folder.name.ilike(f"%{term}%"))
+        .order_by(Folder.name)
+        .limit(limit)
+        .all()
+    )
+    folder_results = [
+        FolderSearchResult(
+            id=folder.id,
+            parent_id=folder.parent_id,
+            parent_name=parent_name,
+            name=folder.name,
+            level=levels[folder.id],
+        )
+        for folder, parent_name in folder_rows
+    ]
+
+    results: list[FileSearchResult | FolderSearchResult] = [*file_results, *folder_results]
+    results.sort(key=lambda r: r.name.lower())
+    return results[:limit]
 
 
 @router.post(

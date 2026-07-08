@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useFileSearchQuery, summarizeBulkResult } from '@/entities/file'
 import { useDebouncedValue, formatSize } from '@/shared/lib'
 import { Modal } from '@/shared/ui'
@@ -12,6 +12,7 @@ import { BulkDownloadAction } from '@/features/file/bulk-download'
 const LEVEL_LABELS = { read: 'чтение', write: 'чтение и изменение' }
 
 export function SearchPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
   const [errorMessage, setErrorMessage] = useState('')
@@ -20,6 +21,14 @@ export function SearchPage() {
 
   const debounced = useDebouncedValue(query, 300)
   const results = useFileSearchQuery(debounced)
+  const folders = useMemo(
+    () => (results.data ?? []).filter((r) => r.type === 'folder'),
+    [results.data],
+  )
+  const files = useMemo(
+    () => (results.data ?? []).filter((r) => r.type === 'file'),
+    [results.data],
+  )
 
   useEffect(() => {
     setSearchParams(debounced ? { q: debounced } : {}, { replace: true })
@@ -34,12 +43,12 @@ export function SearchPage() {
     <div className="browser">
       <main className="content">
         <div className="content-head">
-          <h1>Поиск файлов</h1>
+          <h1>Поиск файлов и папок</h1>
         </div>
 
         <input
           type="search"
-          placeholder="Поиск файлов по названию…"
+          placeholder="Поиск файлов и папок по названию…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoFocus
@@ -88,36 +97,69 @@ export function SearchPage() {
         {debounced.trim().length < 2 ? (
           <div className="empty">Введите не менее двух символов для поиска</div>
         ) : (
-          <FileTable
-            rows={results.data ?? []}
-            emptyMessage="Ничего не найдено"
-            selectedIds={selectedIds}
-            onToggle={(id) =>
-              setSelectedIds((prev) => {
-                const next = new Set(prev)
-                if (next.has(id)) next.delete(id)
-                else next.add(id)
-                return next
-              })
-            }
-            onToggleAll={(checked) =>
-              setSelectedIds(checked ? new Set((results.data ?? []).map((f) => f.id)) : new Set())
-            }
-            columns={[
-              { header: 'Папка', render: (file) => file.folder_name },
-              { header: 'Права', className: 'mono', render: (file) => LEVEL_LABELS[file.level] },
-              {
-                header: 'Размер',
-                className: 'mono',
-                render: (file) =>
-                  file.current_version ? formatSize(file.current_version.size) : '—',
-              },
-            ]}
-            renderName={(file) => <span className="file-name">{file.name}</span>}
-            renderActions={(file) => (
-              <DownloadFileButton url={`/api/files/${file.id}/download`} />
+          <>
+            {folders.length > 0 && (
+              <div className="folder-results">
+                {folders.map((folder) => (
+                  <div
+                    key={folder.id}
+                    className="folder-result-row"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/?folder=${folder.id}`)}
+                    onKeyDown={(e) => e.key === 'Enter' && navigate(`/?folder=${folder.id}`)}
+                  >
+                    <span className="file-name">{folder.name}</span>
+                    <span className="mono folder-name">{folder.parent_name ?? 'Корень'}</span>
+                    <span className="mono">{LEVEL_LABELS[folder.level]}</span>
+                  </div>
+                ))}
+              </div>
             )}
-          />
+
+            <FileTable
+              rows={files}
+              emptyMessage="Ничего не найдено"
+              selectedIds={selectedIds}
+              onToggle={(id) =>
+                setSelectedIds((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(id)) next.delete(id)
+                  else next.add(id)
+                  return next
+                })
+              }
+              onToggleAll={(checked) =>
+                setSelectedIds(checked ? new Set(files.map((f) => f.id)) : new Set())
+              }
+              columns={[
+                { header: 'Папка', render: (file) => file.folder_name },
+                { header: 'Права', className: 'mono', render: (file) => LEVEL_LABELS[file.level] },
+                {
+                  header: 'Размер',
+                  className: 'mono',
+                  render: (file) =>
+                    file.current_version ? formatSize(file.current_version.size) : '—',
+                },
+              ]}
+              renderName={(file) => (
+                <span
+                  className="file-name"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/?folder=${file.folder_id}&highlight=${file.id}`)}
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' && navigate(`/?folder=${file.folder_id}&highlight=${file.id}`)
+                  }
+                >
+                  {file.name}
+                </span>
+              )}
+              renderActions={(file) => (
+                <DownloadFileButton url={`/api/files/${file.id}/download`} />
+              )}
+            />
+          </>
         )}
       </main>
 

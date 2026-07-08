@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { FileSearchResult } from '@/entities/file'
+import type { SearchResult } from '@/entities/file'
 import { useFileSearchQuery } from '@/entities/file'
 import { useDebouncedValue } from '@/shared/lib'
 
@@ -13,11 +13,17 @@ export function GlobalSearch() {
   const debounced = useDebouncedValue(query, 300)
   const isSearchable = debounced.trim().length >= 2
   const results = useFileSearchQuery(debounced)
+  const folderResults = (results.data ?? []).filter((r) => r.type === 'folder')
+  const fileResults = (results.data ?? []).filter((r) => r.type === 'file')
 
   const showDropdown = isOpen && isSearchable
 
-  function selectResult(result: FileSearchResult) {
-    navigate(`/?folder=${result.folder_id}&file=${result.id}`)
+  function selectResult(result: SearchResult) {
+    if (result.type === 'folder') {
+      navigate(`/?folder=${result.id}`)
+    } else {
+      navigate(`/?folder=${result.folder_id}&highlight=${result.id}`)
+    }
     setQuery('')
     setIsOpen(false)
   }
@@ -31,7 +37,7 @@ export function GlobalSearch() {
     <div className="global-search">
       <input
         type="search"
-        placeholder="Поиск файлов по названию…"
+        placeholder="Поиск файлов и папок по названию…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => setIsOpen(true)}
@@ -60,9 +66,22 @@ export function GlobalSearch() {
           {!results.isFetching && (results.data ?? []).length === 0 && (
             <li className="empty">Ничего не найдено</li>
           )}
+          {!results.isFetching && folderResults.length > 0 && (
+            <li className="search-group-label">Папки</li>
+          )}
           {!results.isFetching &&
-            (results.data ?? []).map((result) => (
-              <li key={result.id} onClick={() => selectResult(result)}>
+            folderResults.map((result) => (
+              <li key={`folder-${result.id}`} onClick={() => selectResult(result)}>
+                <span className="file-name">{result.name}</span>
+                <span className="mono folder-name">{result.parent_name ?? 'Корень'}</span>
+              </li>
+            ))}
+          {!results.isFetching && fileResults.length > 0 && (
+            <li className="search-group-label">Файлы</li>
+          )}
+          {!results.isFetching &&
+            fileResults.map((result) => (
+              <li key={`file-${result.id}`} onClick={() => selectResult(result)}>
                 <span className="file-name">{result.name}</span>
                 <span className="mono folder-name">{result.folder_name}</span>
               </li>

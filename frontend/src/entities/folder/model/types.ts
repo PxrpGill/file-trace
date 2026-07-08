@@ -7,3 +7,12 @@ export interface FolderNode {
   level: PermissionLevel
   children: FolderNode[]
 }
+
+export interface FolderSearchResult {
+  type: 'folder'
+  id: number
+  parent_id: number | null
+  parent_name: string | null
+  name: string
+  level: PermissionLevel
+}
