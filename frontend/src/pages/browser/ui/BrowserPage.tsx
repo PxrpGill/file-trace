@@ -138,7 +138,7 @@ export function BrowserPage() {
               {canWrite && (
                 <>
                   <UploadFileButton folderId={selected.id} onError={setErrorMessage} />
-                  <UploadTreeButton folderId={selected.id} onError={setErrorMessage} />
+                  {/* <UploadTreeButton folderId={selected.id} onError={setErrorMessage} /> */}
                   <CreateFolderAction
                     parentId={selected.id}
                     buttonLabel="+ Папка"
