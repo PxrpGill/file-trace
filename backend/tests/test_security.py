@@ -5,8 +5,10 @@ import jwt
 from app.config import settings
 from app.services.security import (
     create_access_token,
+    create_bulk_download_ticket,
     create_download_ticket,
     decode_access_token,
+    decode_bulk_download_ticket,
     decode_download_ticket,
     hash_password,
     verify_password,
@@ -51,3 +53,27 @@ def test_decode_download_ticket_rejects_normal_access_token():
 def test_decode_access_token_rejects_download_ticket():
     ticket = create_download_ticket(42)
     assert decode_access_token(ticket) is None
+
+
+def test_create_bulk_download_ticket_is_decodable():
+    ticket = create_bulk_download_ticket(42, [1, 2, 3])
+    assert decode_bulk_download_ticket(ticket) == (42, [1, 2, 3])
+
+
+def test_decode_bulk_download_ticket_rejects_expired():
+    expired = jwt.encode(
+        {
+            "sub": "42",
+            "aud": "bulk_download",
+            "file_ids": [1, 2],
+            "exp": datetime.now(timezone.utc) - timedelta(seconds=5),
+        },
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+    assert decode_bulk_download_ticket(expired) is None
+
+
+def test_decode_bulk_download_ticket_rejects_download_ticket():
+    ticket = create_download_ticket(42)
+    assert decode_bulk_download_ticket(ticket) is None

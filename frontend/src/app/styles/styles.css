@@ -291,6 +291,27 @@ input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 0; }
   font-family: var(--font-mono);
   font-size: 12px;
 }
+
+.bulk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.bulk-toolbar .spacer { flex: 1; }
+.bulk-result-banner {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px;
+}
+th.select-col, td.select-col { width: 1%; padding-right: 0; }
 .spinner {
   width: 14px;
   height: 14px;

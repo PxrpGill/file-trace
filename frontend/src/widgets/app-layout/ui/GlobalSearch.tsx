@@ -22,6 +22,11 @@ export function GlobalSearch() {
     setIsOpen(false)
   }
 
+  function goToSearchPage() {
+    navigate(`/search?q=${encodeURIComponent(debounced)}`)
+    setIsOpen(false)
+  }
+
   return (
     <div className="global-search">
       <input
@@ -37,6 +42,9 @@ export function GlobalSearch() {
           if (e.key === 'Escape') {
             setIsOpen(false)
             e.currentTarget.blur()
+          }
+          if (e.key === 'Enter' && isSearchable) {
+            goToSearchPage()
           }
         }}
       />
@@ -59,6 +67,11 @@ export function GlobalSearch() {
                 <span className="mono folder-name">{result.folder_name}</span>
               </li>
             ))}
+          {!results.isFetching && (
+            <li className="search-results-all" onClick={() => goToSearchPage()}>
+              Показать все результаты →
+            </li>
+          )}
         </ul>
       )}
     </div>

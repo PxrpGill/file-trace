@@ -10,6 +10,7 @@ from app.database import SessionLocal
 from app.models import User, UserRole
 from app.services.security import (
     decode_access_token,
+    decode_bulk_download_ticket,
     decode_download_ticket,
     decode_preview_ticket,
 )
@@ -144,6 +145,27 @@ def get_active_user_or_preview_ticket(
 
 
 ActiveUserOrPreviewTicket = Annotated[User, Depends(get_active_user_or_preview_ticket)]
+
+
+def get_bulk_download_ticket_claims(db: DbDep, ticket: str) -> tuple[User, list[int]]:
+    """Like get_current_user, but for the bulk-download ticket, which carries
+    both the user id and the already-permission-filtered file id list — a
+    bare bearer header wouldn't know which files, so there's no header
+    fallback here (unlike get_user_from_ticket_or_header)."""
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+    )
+    claims = decode_bulk_download_ticket(ticket)
+    if claims is None:
+        raise unauthorized
+    user_id, file_ids = claims
+    user = db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise unauthorized
+    return user, file_ids
+
+
+BulkDownloadTicket = Annotated[tuple[User, list[int]], Depends(get_bulk_download_ticket_claims)]
 
 
 def require_admin_or_ticket(user: ActiveUserOrTicket) -> User:

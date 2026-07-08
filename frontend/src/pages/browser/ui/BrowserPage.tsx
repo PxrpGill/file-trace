@@ -4,10 +4,11 @@ import { useSession } from '@/entities/session'
 import type { FolderNode } from '@/entities/folder'
 import { useFolderTreeQuery, flattenTree } from '@/entities/folder'
 import type { FileItem } from '@/entities/file'
-import { useFilesQuery, isArchiveFile, getPreviewKind } from '@/entities/file'
+import { useFilesQuery, isArchiveFile, getPreviewKind, summarizeBulkResult } from '@/entities/file'
 import { useMutationState } from '@tanstack/react-query'
 import { formatDate, formatSize } from '@/shared/lib'
 import { Modal } from '@/shared/ui'
+import { FileTable, SelectionToolbar } from '@/widgets/file-table'
 import { FolderTree } from '@/widgets/folder-tree'
 import { FileDrawer } from '@/widgets/file-drawer'
 import { CreateFolderAction } from '@/features/folder/create'
@@ -20,6 +21,9 @@ import { DeleteFileAction } from '@/features/file/delete-file'
 import { DownloadFileButton } from '@/features/file/download-file'
 import { ExtractArchiveAction } from '@/features/file/extract-archive'
 import { PreviewModal } from '@/features/file/preview-file'
+import { BulkMoveAction } from '@/features/file/bulk-move'
+import { BulkDeleteAction } from '@/features/file/bulk-delete'
+import { BulkDownloadAction } from '@/features/file/bulk-download'
 
 export function BrowserPage() {
   const { user } = useSession()
@@ -27,6 +31,8 @@ export function BrowserPage() {
   const [openFile, setOpenFile] = useState<FileItem | null>(null)
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
+  const [resultMessage, setResultMessage] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [isDragOver, setIsDragOver] = useState(false)
   const dragCounter = useRef(0)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -50,6 +56,11 @@ export function BrowserPage() {
   const uploadingCount = useMutationState({
     filters: { mutationKey: ['upload-file'], status: 'pending' },
   }).length
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+    setResultMessage('')
+  }, [selected?.id])
 
   useEffect(() => {
     const folderParam = searchParams.get('folder')
@@ -165,101 +176,152 @@ export function BrowserPage() {
               </div>
             )}
 
-            {(files.data ?? []).length === 0 ? (
-              <div className="empty">
-                В папке пока нет файлов
-                {canWrite && ' — перетащите файл сюда или нажмите «Загрузить файл»'}
-              </div>
-            ) : (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Имя</th>
-                      <th>Размер</th>
-                      <th>Версия</th>
-                      <th>Обновлён</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(files.data ?? []).map((file) => {
-                      const versionUploading = uploadingVersionIds.has(file.id)
-                      const extracting = extractingIds.has(file.id)
-                      const rowBusy = versionUploading || extracting
-                      return (
-                      <tr key={file.id}>
-                        <td>
-                          <span
-                            className="file-name"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => setOpenFile(file)}
-                            onKeyDown={(e) => e.key === 'Enter' && setOpenFile(file)}
-                          >
-                            {file.name}
-                          </span>
-                        </td>
-                        <td className="mono">
-                          {file.current_version ? formatSize(file.current_version.size) : '—'}
-                        </td>
-                        <td className="mono">v{file.current_version?.version_no ?? 0}</td>
-                        <td className="mono">
-                          {file.current_version ? formatDate(file.current_version.created_at) : '—'}
-                        </td>
-                        <td className="actions">
-                          {getPreviewKind(file.name) !== null && (
-                            <>
-                              <button
-                                className="btn secondary small"
-                                disabled={rowBusy}
-                                onClick={() => setPreviewFile(file)}
-                              >
-                                Просмотр
-                              </button>{' '}
-                            </>
-                          )}
-                          <DownloadFileButton
-                            url={`/api/files/${file.id}/download`}
-                            disabled={rowBusy}
-                          />{' '}
-                          {canWrite && (
-                            <>
-                              <UploadVersionButton
-                                file={file}
-                                disabled={rowBusy}
-                                onError={setErrorMessage}
-                              />{' '}
-                              {isArchiveFile(file.name) && (
-                                <>
-                                  <ExtractArchiveAction
-                                    file={file}
-                                    disabled={rowBusy}
-                                    onError={setErrorMessage}
-                                  />{' '}
-                                </>
-                              )}
-                              <RenameFileAction file={file} disabled={rowBusy} />{' '}
-                              <MoveFileAction
-                                file={file}
-                                disabled={rowBusy}
-                                onError={setErrorMessage}
-                              />{' '}
-                              <DeleteFileAction
-                                file={file}
-                                disabled={rowBusy}
-                                onDeleted={() => setOpenFile(null)}
-                              />
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+            {resultMessage && (
+              <div className="bulk-result-banner">
+                {resultMessage}{' '}
+                <button className="btn secondary small" onClick={() => setResultMessage('')}>
+                  ×
+                </button>
               </div>
             )}
+
+            <SelectionToolbar count={selectedIds.size} onClear={() => setSelectedIds(new Set())}>
+              <BulkDownloadAction
+                fileIds={[...selectedIds]}
+                onResult={(result) => {
+                  setResultMessage(
+                    summarizeBulkResult('Скачано', result.files.length, selectedIds.size, result.skipped),
+                  )
+                }}
+                onError={setErrorMessage}
+              />{' '}
+              {canWrite && (
+                <>
+                  <BulkMoveAction
+                    fileIds={[...selectedIds]}
+                    onDone={(result) => {
+                      setResultMessage(
+                        summarizeBulkResult('Перемещено', result.moved.length, selectedIds.size, result.skipped),
+                      )
+                      setSelectedIds(new Set())
+                    }}
+                    onError={setErrorMessage}
+                  />{' '}
+                  <BulkDeleteAction
+                    fileIds={[...selectedIds]}
+                    onDone={(result) => {
+                      setResultMessage(
+                        summarizeBulkResult('Удалено', result.deleted.length, selectedIds.size, result.skipped),
+                      )
+                      setSelectedIds(new Set())
+                    }}
+                  />
+                </>
+              )}
+            </SelectionToolbar>
+
+            <FileTable
+              rows={files.data ?? []}
+              emptyMessage={
+                'В папке пока нет файлов' +
+                (canWrite ? ' — перетащите файл сюда или нажмите «Загрузить файл»' : '')
+              }
+              selectedIds={selectedIds}
+              onToggle={(id) =>
+                setSelectedIds((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(id)) next.delete(id)
+                  else next.add(id)
+                  return next
+                })
+              }
+              onToggleAll={(checked) =>
+                setSelectedIds(checked ? new Set((files.data ?? []).map((f) => f.id)) : new Set())
+              }
+              columns={[
+                {
+                  header: 'Размер',
+                  className: 'mono',
+                  render: (file) =>
+                    file.current_version ? formatSize(file.current_version.size) : '—',
+                },
+                {
+                  header: 'Версия',
+                  className: 'mono',
+                  render: (file) => `v${file.current_version?.version_no ?? 0}`,
+                },
+                {
+                  header: 'Обновлён',
+                  className: 'mono',
+                  render: (file) =>
+                    file.current_version ? formatDate(file.current_version.created_at) : '—',
+                },
+              ]}
+              renderName={(file) => (
+                <span
+                  className="file-name"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setOpenFile(file)}
+                  onKeyDown={(e) => e.key === 'Enter' && setOpenFile(file)}
+                >
+                  {file.name}
+                </span>
+              )}
+              renderActions={(file) => {
+                const versionUploading = uploadingVersionIds.has(file.id)
+                const extracting = extractingIds.has(file.id)
+                const rowBusy = versionUploading || extracting
+                return (
+                  <>
+                    {getPreviewKind(file.name) !== null && (
+                      <>
+                        <button
+                          className="btn secondary small"
+                          disabled={rowBusy}
+                          onClick={() => setPreviewFile(file)}
+                        >
+                          Просмотр
+                        </button>{' '}
+                      </>
+                    )}
+                    <DownloadFileButton
+                      url={`/api/files/${file.id}/download`}
+                      disabled={rowBusy}
+                    />{' '}
+                    {canWrite && (
+                      <>
+                        <UploadVersionButton
+                          file={file}
+                          disabled={rowBusy}
+                          onError={setErrorMessage}
+                        />{' '}
+                        {isArchiveFile(file.name) && (
+                          <>
+                            <ExtractArchiveAction
+                              file={file}
+                              disabled={rowBusy}
+                              onError={setErrorMessage}
+                            />{' '}
+                          </>
+                        )}
+                        <RenameFileAction file={file} disabled={rowBusy} />{' '}
+                        <MoveFileAction
+                          file={file}
+                          disabled={rowBusy}
+                          onError={setErrorMessage}
+                        />{' '}
+                        <DeleteFileAction
+                          file={file}
+                          disabled={rowBusy}
+                          onDeleted={() => setOpenFile(null)}
+                        />
+                      </>
+                    )}
+                  </>
+                )
+              }}
+            />
           </>
         )}
       </main>

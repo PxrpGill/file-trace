@@ -1,4 +1,8 @@
 import io
+import os
+import shutil
+import tempfile
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -6,12 +10,14 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from app.api.deps import (
     ActiveUser,
     ActiveUserOrPreviewTicket,
     ActiveUserOrTicket,
     AdminUser,
+    BulkDownloadTicket,
     DbDep,
     StorageDep,
     client_ip,
@@ -25,6 +31,12 @@ from app.models import (
     User,
 )
 from app.schemas.files import (
+    BulkDeleteResult,
+    BulkDownloadTicketResult,
+    BulkFailure,
+    BulkFileRequest,
+    BulkMoveRequest,
+    BulkMoveResult,
     ExtractResult,
     FileOut,
     FileSearchResult,
@@ -42,7 +54,7 @@ from app.services.archive import (
     open_archive,
     validate_entries,
 )
-from app.services.permissions import accessible_levels, require_folder_access
+from app.services.permissions import accessible_levels, permits, require_folder_access
 from app.services.preview import (
     PreviewConversionFailedError,
     PreviewConversionTimeoutError,
@@ -57,6 +69,7 @@ from app.services.preview import (
     iter_range,
     parse_range_header,
 )
+from app.services.security import create_bulk_download_ticket
 from app.services.storage import FileStorage
 from app.services.tree_upload import (
     attach_file_version,
@@ -89,6 +102,29 @@ def _get_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     require_folder_access(db, user, file.folder_id, level)
     return file
+
+
+def _resolve_bulk_files(
+    db: Session,
+    file_ids: list[int],
+    levels: dict[int, PermissionLevel],
+    level: PermissionLevel,
+) -> tuple[list[File], list[BulkFailure]]:
+    ok: list[File] = []
+    failed: list[BulkFailure] = []
+    seen: set[int] = set()
+    for file_id in file_ids:
+        if file_id in seen:
+            continue
+        seen.add(file_id)
+        file = db.get(File, file_id)
+        if file is None or file.is_deleted:
+            failed.append(BulkFailure(file_id=file_id, reason="not_found"))
+        elif not permits(levels.get(file.folder_id), level):
+            failed.append(BulkFailure(file_id=file_id, reason="forbidden"))
+        else:
+            ok.append(file)
+    return ok, failed
 
 
 def _resolve_version(db: Session, file: File, version_id: int | None) -> FileVersion:
@@ -143,7 +179,8 @@ def search_files(
     if len(term) < MIN_SEARCH_QUERY_LENGTH:
         return []
 
-    folder_ids = list(accessible_levels(db, user).keys())
+    levels = accessible_levels(db, user)
+    folder_ids = list(levels.keys())
     if not folder_ids:
         return []
 
@@ -165,6 +202,7 @@ def search_files(
             folder_id=file.folder_id,
             folder_name=folder_name,
             name=file.name,
+            level=levels[file.folder_id],
             current_version=file.current_version,
         )
         for file, folder_name in rows
@@ -286,6 +324,72 @@ def download_file(
             "Content-Disposition": f"attachment; filename*=UTF-8''{quoted}",
             "Content-Length": str(version.size),
         },
+    )
+
+
+_ZIP_CHUNK_SIZE = 65536
+
+
+@router.post("/files/bulk-download-ticket", response_model=BulkDownloadTicketResult)
+def bulk_download_ticket(
+    body: BulkFileRequest, db: DbDep, user: ActiveUser
+) -> BulkDownloadTicketResult:
+    levels = accessible_levels(db, user)
+    files, failed = _resolve_bulk_files(db, body.file_ids, levels, PermissionLevel.read)
+    if not files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No accessible files")
+    ticket = create_bulk_download_ticket(user.id, [f.id for f in files])
+    return BulkDownloadTicketResult(ticket=ticket, files=[f.id for f in files], skipped=failed)
+
+
+@router.get("/files/bulk-download-zip")
+def bulk_download_zip(
+    ticket_claims: BulkDownloadTicket, db: DbDep, storage: StorageDep, request: Request
+) -> StreamingResponse:
+    user, file_ids = ticket_claims
+    # Права могли измениться за время жизни тикета — пересчитываем заново.
+    levels = accessible_levels(db, user)
+    files, _ = _resolve_bulk_files(db, file_ids, levels, PermissionLevel.read)
+    if not files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No accessible files")
+
+    ip = client_ip(request)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    used_names: dict[str, int] = {}
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file in files:
+            version = file.current_version
+            if version is None:
+                continue
+            folder = db.get(Folder, file.folder_id)
+            base_arcname = f"{folder.name}/{file.name}"
+            count = used_names.get(base_arcname, 0)
+            used_names[base_arcname] = count + 1
+            arcname = base_arcname if count == 0 else f"{folder.name}/{file.name} ({count})"
+            with zf.open(arcname, "w") as dest, storage.open(version.storage_key) as src:
+                shutil.copyfileobj(src, dest)
+            audit.record(
+                db,
+                AuditAction.file_download,
+                user_id=user.id,
+                file_id=file.id,
+                folder_id=file.folder_id,
+                file_version_id=version.id,
+                ip=ip,
+                details={"name": file.name, "version_no": version.version_no, "bulk": True},
+            )
+    db.commit()
+    tmp.close()
+
+    def iterfile():
+        with open(tmp.name, "rb") as f:
+            yield from iter(lambda: f.read(_ZIP_CHUNK_SIZE), b"")
+
+    return StreamingResponse(
+        iterfile(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="files.zip"'},
+        background=BackgroundTask(os.unlink, tmp.name),
     )
 
 
@@ -549,6 +653,33 @@ def update_file(
     return file
 
 
+@router.post("/files/bulk-move", response_model=BulkMoveResult)
+def bulk_move_files(
+    body: BulkMoveRequest, db: DbDep, user: ActiveUser, request: Request
+) -> BulkMoveResult:
+    require_folder_access(db, user, body.folder_id, PermissionLevel.write)
+    levels = accessible_levels(db, user)
+    files, failed = _resolve_bulk_files(db, body.file_ids, levels, PermissionLevel.write)
+    ip = client_ip(request)
+    moved: list[int] = []
+    for file in files:
+        if file.folder_id != body.folder_id:
+            from_folder = file.folder_id
+            file.folder_id = body.folder_id
+            audit.record(
+                db,
+                AuditAction.file_move,
+                user_id=user.id,
+                file_id=file.id,
+                folder_id=body.folder_id,
+                ip=ip,
+                details={"from_folder_id": from_folder, "to_folder_id": body.folder_id},
+            )
+        moved.append(file.id)
+    db.commit()
+    return BulkMoveResult(moved=moved, skipped=failed)
+
+
 @router.delete("/files/{file_id}")
 def delete_file(file_id: int, db: DbDep, user: ActiveUser, request: Request) -> dict:
     file = _get_file(db, user, file_id, PermissionLevel.write)
@@ -566,6 +697,33 @@ def delete_file(file_id: int, db: DbDep, user: ActiveUser, request: Request) -> 
     )
     db.commit()
     return {"status": "ok"}
+
+
+@router.post("/files/bulk-delete", response_model=BulkDeleteResult)
+def bulk_delete_files(
+    body: BulkFileRequest, db: DbDep, user: ActiveUser, request: Request
+) -> BulkDeleteResult:
+    levels = accessible_levels(db, user)
+    files, failed = _resolve_bulk_files(db, body.file_ids, levels, PermissionLevel.write)
+    ip = client_ip(request)
+    now = datetime.now(timezone.utc)
+    deleted: list[int] = []
+    for file in files:
+        file.is_deleted = True
+        file.deleted_at = now
+        file.deleted_by = user.id
+        audit.record(
+            db,
+            AuditAction.file_delete,
+            user_id=user.id,
+            file_id=file.id,
+            folder_id=file.folder_id,
+            ip=ip,
+            details={"name": file.name},
+        )
+        deleted.append(file.id)
+    db.commit()
+    return BulkDeleteResult(deleted=deleted, skipped=failed)
 
 
 @router.post("/files/{file_id}/restore", response_model=FileOut)

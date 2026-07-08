@@ -11,6 +11,7 @@ export default defineConfig([
       './src/entities/session/**',
       './src/entities/folder/model/types.ts',
       './src/entities/file/api/file-api.ts',
+      './src/entities/file/model/types.ts',
     ],
     rules: {
       'fsd/forbidden-imports': 'off',

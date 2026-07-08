@@ -1,3 +1,5 @@
+import type { PermissionLevel } from '@/entities/permission'
+
 export interface FileVersion {
   id: number
   version_no: number
@@ -21,7 +23,29 @@ export interface FileSearchResult {
   folder_id: number
   folder_name: string
   name: string
+  level: PermissionLevel
   current_version: FileVersion | null
+}
+
+export interface BulkFailure {
+  file_id: number
+  reason: 'not_found' | 'forbidden'
+}
+
+export interface BulkMoveResult {
+  moved: number[]
+  skipped: BulkFailure[]
+}
+
+export interface BulkDeleteResult {
+  deleted: number[]
+  skipped: BulkFailure[]
+}
+
+export interface BulkDownloadTicketResult {
+  ticket: string
+  files: number[]
+  skipped: BulkFailure[]
 }
 
 const ARCHIVE_EXTENSIONS = ['.zip', '.rar']

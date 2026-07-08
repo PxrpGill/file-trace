@@ -36,6 +36,22 @@ def test_search_excludes_folders_without_access(client, admin, user):
     assert results[0]["folder_id"] == visible["id"]
 
 
+def test_search_result_reflects_permission_level(client, admin, user):
+    admin_h = auth_header(client, "admin", "admin-pass")
+    alice_h = auth_header(client, "alice", "alice-pass")
+    readonly = make_folder(client, admin_h, "Docs")
+    writable = make_folder(client, admin_h, "Shared")
+    grant(client, admin_h, readonly["id"], user.id, "read")
+    grant(client, admin_h, writable["id"], user.id, "write")
+    upload(client, admin_h, readonly["id"], "plan-read.txt")
+    upload(client, admin_h, writable["id"], "plan-write.txt")
+
+    response = client.get("/api/files/search", params={"q": "plan"}, headers=alice_h)
+    results = {r["folder_id"]: r["level"] for r in response.json()}
+    assert results[readonly["id"]] == "read"
+    assert results[writable["id"]] == "write"
+
+
 def test_search_excludes_deleted_files(client, admin):
     admin_h = auth_header(client, "admin", "admin-pass")
     docs = make_folder(client, admin_h, "Docs")

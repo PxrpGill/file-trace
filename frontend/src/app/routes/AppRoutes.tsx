@@ -3,6 +3,7 @@ import { useSession } from '@/entities/session'
 import { LoginPage } from '@/pages/login'
 import { ChangePasswordPage } from '@/pages/change-password'
 import { BrowserPage } from '@/pages/browser'
+import { SearchPage } from '@/pages/search'
 import { UsersPage } from '@/pages/admin/users'
 import { PermissionsPage } from '@/pages/admin/permissions'
 import { TrashPage } from '@/pages/admin/trash'
@@ -32,6 +33,7 @@ export function AppRoutes() {
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<BrowserPage />} />
+          <Route path="/search" element={<SearchPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="users" replace />} />

@@ -27,14 +27,17 @@ def effective_level(db: Session, user: User, folder: Folder) -> PermissionLevel 
     return None
 
 
+def permits(actual: PermissionLevel | None, level: PermissionLevel) -> bool:
+    return actual is not None and (level != PermissionLevel.write or actual == PermissionLevel.write)
+
+
 def require_folder_access(
     db: Session, user: User, folder_id: int, level: PermissionLevel
 ) -> Folder:
     folder = db.get(Folder, folder_id)
     if folder is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found")
-    actual = effective_level(db, user, folder)
-    if actual is None or (level == PermissionLevel.write and actual != PermissionLevel.write):
+    if not permits(effective_level(db, user, folder), level):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to folder")
     return folder
 

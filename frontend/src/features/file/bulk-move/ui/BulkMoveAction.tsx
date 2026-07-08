@@ -1,39 +1,45 @@
 import { useState } from 'react'
 import { Modal } from '@/shared/ui'
-import type { FileItem } from '@/entities/file'
 import { flattenTree, useFolderTreeQuery, FolderPicker } from '@/entities/folder'
-import { useUpdateFileMutation } from '../model/use-update-file'
+import type { BulkMoveResult } from '@/entities/file'
+import { useBulkMoveMutation } from '../model/use-bulk-move-file'
 
-export function MoveFileAction({
-  file,
-  disabled,
+export function BulkMoveAction({
+  fileIds,
+  onDone,
   onError,
 }: {
-  file: FileItem
-  disabled?: boolean
+  fileIds: number[]
+  onDone?: (result: BulkMoveResult) => void
   onError?: (message: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const tree = useFolderTreeQuery()
-  const updateFile = useUpdateFileMutation()
+  const bulkMove = useBulkMoveMutation()
   const folders = flattenTree(tree.data ?? [])
 
   return (
     <>
-      <button className="btn secondary small" disabled={disabled} onClick={() => setOpen(true)}>
+      <button
+        className="btn secondary small"
+        disabled={fileIds.length === 0}
+        onClick={() => setOpen(true)}
+      >
         Переместить
       </button>
       {open && (
-        <Modal title={`Переместить «${file.name}»`} onClose={() => setOpen(false)}>
+        <Modal title={`Переместить файлы (${fileIds.length})`} onClose={() => setOpen(false)}>
           <label htmlFor="move-target">Папка назначения</label>
           <FolderPicker
             folders={folders}
-            excludeFolderId={file.folder_id}
             onSelect={(folderId) => {
               setOpen(false)
-              updateFile.mutate(
-                { fileId: file.id, body: { folder_id: folderId } },
-                { onError: () => onError?.('Нет права на запись в папку назначения') },
+              bulkMove.mutate(
+                { fileIds, folderId },
+                {
+                  onSuccess: onDone,
+                  onError: () => onError?.('Не удалось переместить файлы'),
+                },
               )
             }}
           />

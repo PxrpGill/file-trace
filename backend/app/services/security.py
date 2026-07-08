@@ -42,32 +42,48 @@ def decode_access_token(token: str) -> int | None:
 _TICKET_TTL = {
     "download": timedelta(seconds=60),
     "preview": timedelta(minutes=20),
+    "bulk_download": timedelta(seconds=60),
 }
 
 
-def create_ticket(user_id: int, purpose: str) -> str:
+def create_ticket(user_id: int, purpose: str, extra_claims: dict | None = None) -> str:
     """Short-lived, scoped JWT for browser-native `src`/`href` requests that
     can't carry an Authorization header. `purpose` becomes the JWT audience,
-    so a ticket minted for one purpose is rejected for another."""
+    so a ticket minted for one purpose is rejected for another. `extra_claims`
+    lets a ticket carry data beyond the user id (e.g. bulk_download's file ids),
+    since a GET request has no body to carry it separately."""
     payload = {
         "sub": str(user_id),
         "exp": datetime.now(timezone.utc) + _TICKET_TTL[purpose],
         "aud": purpose,
     }
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def decode_ticket(token: str, purpose: str) -> int | None:
-    """Returns the user id for a valid, unexpired ticket of that purpose, else None."""
+def decode_ticket_payload(token: str, purpose: str) -> dict | None:
+    """Like decode_ticket, but returns the full claim set (for tickets that
+    carry data beyond the user id, e.g. bulk_download's file_ids)."""
     try:
-        payload = jwt.decode(
+        return jwt.decode(
             token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
             audience=purpose,
         )
-        return int(payload["sub"])
     except (jwt.InvalidTokenError, KeyError, ValueError):
+        return None
+
+
+def decode_ticket(token: str, purpose: str) -> int | None:
+    """Returns the user id for a valid, unexpired ticket of that purpose, else None."""
+    payload = decode_ticket_payload(token, purpose)
+    if payload is None:
+        return None
+    try:
+        return int(payload["sub"])
+    except (KeyError, ValueError):
         return None
 
 
@@ -79,6 +95,23 @@ def create_download_ticket(user_id: int) -> str:
 def decode_download_ticket(token: str) -> int | None:
     """Returns the user id for a valid, unexpired download ticket, else None."""
     return decode_ticket(token, "download")
+
+
+def create_bulk_download_ticket(user_id: int, file_ids: list[int]) -> str:
+    """Short-lived ticket carrying the already-permission-filtered file id
+    list, since the GET that consumes it can't carry a request body."""
+    return create_ticket(user_id, "bulk_download", extra_claims={"file_ids": file_ids})
+
+
+def decode_bulk_download_ticket(token: str) -> tuple[int, list[int]] | None:
+    """Returns (user_id, file_ids) for a valid, unexpired bulk-download ticket, else None."""
+    payload = decode_ticket_payload(token, "bulk_download")
+    if payload is None:
+        return None
+    try:
+        return int(payload["sub"]), [int(i) for i in payload["file_ids"]]
+    except (KeyError, ValueError, TypeError):
+        return None
 
 
 def create_preview_ticket(user_id: int) -> str:
