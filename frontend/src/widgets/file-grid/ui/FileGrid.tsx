@@ -15,6 +15,7 @@ export function FileGrid<T extends { id: number }>({
   renderIcon,
   renderName,
   renderMeta,
+  getTitle,
   onContextMenu,
   emptyMessage,
   onEndReached,
@@ -28,6 +29,7 @@ export function FileGrid<T extends { id: number }>({
   renderIcon: (row: T) => ReactNode
   renderName: (row: T) => ReactNode
   renderMeta?: (row: T) => ReactNode
+  getTitle?: (row: T) => string
   onContextMenu?: (row: T, x: number, y: number) => void
   emptyMessage: string
   onEndReached?: () => void
@@ -106,6 +108,7 @@ export function FileGrid<T extends { id: number }>({
                       key={row.id}
                       className={`file-tile${selected ? ' selected' : ''}${row.id === highlightId ? ' highlighted' : ''}`}
                       style={{ width: TILE_WIDTH }}
+                      title={getTitle?.(row)}
                       onClick={() => onOpenRow?.(row)}
                       draggable={draggable}
                       onDragStart={

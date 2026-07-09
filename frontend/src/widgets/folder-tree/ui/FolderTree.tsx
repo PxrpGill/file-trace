@@ -88,7 +88,7 @@ function TreeNode({
           <ChevronRight size={14} strokeWidth={2} />
         </span>
         {isExpanded ? <FolderOpen size={15} aria-hidden strokeWidth={1.75} /> : <Folder size={15} aria-hidden strokeWidth={1.75} />}
-        <span>{node.name}</span>
+        <span className="tree-name" title={node.name}>{node.name}</span>
         <span className="lvl">{node.level === 'write' ? 'изм.' : 'чт.'}</span>
       </button>
       {isExpanded && (

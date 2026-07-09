@@ -266,13 +266,21 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 }
 .tree-row:hover { background: rgba(37, 99, 235, 0.06); }
 .tree-row.selected { background: var(--accent-soft); color: var(--accent); }
+.tree-row .tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .tree-row .lvl {
-  margin-left: auto;
+  flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--steel);
 }
 .tree-row.selected .lvl { color: var(--steel); }
+.tree-row svg { flex-shrink: 0; }
 .tree-row .arrow {
   display: inline-flex;
   transition: transform 0.15s ease;
@@ -494,11 +502,6 @@ td.actions { text-align: right; white-space: nowrap; }
 
 /* ---------- grid view ---------- */
 
-.file-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-}
 .file-tile {
   position: relative;
   display: flex;
@@ -518,8 +521,12 @@ td.actions { text-align: right; white-space: nowrap; }
 .file-tile .tile-name {
   font-size: 13px;
   font-weight: 500;
-  word-break: break-word;
   max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 .file-tile .tile-meta { font-size: 11px; color: var(--steel); }
 .file-tile .tile-check {

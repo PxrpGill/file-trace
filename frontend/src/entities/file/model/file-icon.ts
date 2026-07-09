@@ -8,7 +8,7 @@ const VIDEO_EXTENSIONS = ['.mp4', '.webm']
 const DOCUMENT_EXTENSIONS = ['.pdf', '.doc', '.docx', '.txt', '.md']
 
 function hasExtension(name: string, extensions: string[]): boolean {
-  const lower = name.toLowerCase()
+  const lower = name.trim().toLowerCase()
   return extensions.some((ext) => lower.endsWith(ext))
 }
 

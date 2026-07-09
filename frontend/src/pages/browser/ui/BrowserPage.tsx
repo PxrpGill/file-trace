@@ -428,6 +428,7 @@ export function BrowserPage() {
                 renderMeta={(file) =>
                   file.current_version ? formatSize(file.current_version.size) : '—'
                 }
+                getTitle={(file) => file.name}
                 highlightId={highlightedFileId}
                 onContextMenu={(file, x, y) => setContextMenu({ kind: 'file', file, x, y })}
                 draggable={canWrite}

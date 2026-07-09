@@ -58,7 +58,7 @@ export interface BulkDownloadTicketResult {
 const ARCHIVE_EXTENSIONS = ['.zip', '.rar']
 
 export function isArchiveFile(name: string): boolean {
-  const lower = name.toLowerCase()
+  const lower = name.trim().toLowerCase()
   return ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(ext))
 }
 
@@ -72,7 +72,7 @@ const PREVIEW_EXTENSIONS: Record<PreviewKind, string[]> = {
 }
 
 export function getPreviewKind(name: string): PreviewKind | null {
-  const lower = name.toLowerCase()
+  const lower = name.trim().toLowerCase()
   for (const kind of Object.keys(PREVIEW_EXTENSIONS) as PreviewKind[]) {
     if (PREVIEW_EXTENSIONS[kind].some((ext) => lower.endsWith(ext))) return kind
   }
