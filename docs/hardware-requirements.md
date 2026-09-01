@@ -25,7 +25,7 @@ docker-compose стек file-trace (`backend` + `db` + `frontend`/nginx) —
   так прожорлива по RAM, как LibreOffice.
 - **Загрузка файлов** — стримится чанками по 1 МБ прямо на диск
   (`app/services/storage.py`), в памяти не буферизуется — даже большие
-  файлы (`client_max_body_size 2g` в nginx) не бьют по RAM backend'а.
+  файлы (`client_max_body_size 10g` в nginx) не бьют по RAM backend'а.
 - **PostgreSQL 17** живёт в том же compose-стеке, на той же VM.
 
 ## Рекомендация

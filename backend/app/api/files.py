@@ -426,7 +426,11 @@ def bulk_download_zip(
     }
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
     used_names: dict[str, int] = {}
-    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+    # STORED, не DEFLATED: большая часть контента (видео, офисные архивы,
+    # изображения) уже сжата своим форматом — deflate тратит CPU и время,
+    # почти ничего не выигрывая в размере, и рискует не уложиться в
+    # proxy_read_timeout на крупных выборках файлов.
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as zf:
         for file in files:
             version = file.current_version
             if version is None:
