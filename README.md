@@ -75,6 +75,12 @@ uv run pytest
 Каждое действие покрыто тестами вместе со своей записью аудита; отдельно проверяются
 запреты доступа (нет права — 403, папка не видна в дереве).
 
+## Массовый импорт файлов
+
+Для разового переноса большого объёма уже существующих файлов (миграция с
+сетевого диска, первичное внедрение) обычная загрузка через UI не подходит —
+см. [`docs/bulk-import.md`](docs/bulk-import.md) про команду `import-tree`.
+
 ## Структура
 
 ```
@@ -83,7 +89,7 @@ backend/
     api/        # роутеры: auth, users, folders, permissions, files, audit_log
     models/     # User, Folder, File, FileVersion, FolderPermission, AuditLog
     services/   # storage (диск/S3-абстракция), audit (единственная точка записи), permissions
-    cli.py      # create-admin
+    cli.py      # create-admin, import-tree (массовый импорт — docs/bulk-import.md)
   alembic/      # миграции
   tests/
 frontend/
