@@ -24,6 +24,12 @@ FastAPI + SQLAlchemy + PostgreSQL (метаданные и журнал), фай
 Сайзинг VM под прод-стек (CPU/RAM/диск, на что влияет LibreOffice-конвертация
 и распаковка архивов) — [`docs/hardware-requirements.md`](docs/hardware-requirements.md).
 
+## Доступ по локальному DNS-имени
+
+Порт 80 вместо 8080 и человекочитаемое имя (`file-trace.alexa.local`) вместо
+IP в локальной сети, включая настройку на MikroTik и резолвинг для клиентов
+OpenVPN — [`docs/local-dns-setup.md`](docs/local-dns-setup.md).
+
 ## Запуск (production)
 
 ```bash
