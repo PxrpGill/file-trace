@@ -19,6 +19,11 @@
 FastAPI + SQLAlchemy + PostgreSQL (метаданные и журнал), файлы на диске за абстракцией
 `FileStorage` (готово к замене на S3), React + TypeScript + Vite, nginx, docker-compose.
 
+## Требования к железу
+
+Сайзинг VM под прод-стек (CPU/RAM/диск, на что влияет LibreOffice-конвертация
+и распаковка архивов) — [`docs/hardware-requirements.md`](docs/hardware-requirements.md).
+
 ## Запуск (production)
 
 ```bash
